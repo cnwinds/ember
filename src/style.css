@@ -27,3 +27,61 @@ canvas#game {
   cursor: pointer;
   outline: none;
 }
+
+/* 刘海屏安全区探针（不可见；JS 读 computed padding 得 insets） */
+#safe-probe {
+  position: fixed;
+  visibility: hidden;
+  pointer-events: none;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+/* 竖屏旋转提示：仅「触摸设备 + 竖屏」显示（横屏最佳体验引导） */
+#rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: #2a1f1a;
+  color: #f2e3cf;
+  font:
+    700 18px system-ui,
+    -apple-system;
+  text-align: center;
+  letter-spacing: 0.04em;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#rotate span {
+  font-size: 14px;
+  opacity: 0.65;
+}
+#rotate svg {
+  width: 72px;
+  height: 72px;
+  opacity: 0.9;
+  animation: rotate-tip 2.2s ease-in-out infinite;
+}
+@keyframes rotate-tip {
+  0%,
+  25% {
+    transform: rotate(0deg);
+  }
+  60%,
+  100% {
+    transform: rotate(90deg);
+  }
+}
+@media (orientation: portrait) and (pointer: coarse) {
+  #rotate {
+    display: flex;
+  }
+}

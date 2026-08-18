@@ -37,6 +37,8 @@ export interface HudState {
 export class HUD {
   private w = 0;
   private h = 0;
+  /** 刘海屏安全区（横屏时左右 insets 避开刘海/打孔；resize 时由 App 写入） */
+  inset = { l: 0, t: 0, r: 0 };
   /** combo 弹跳动画（1=静止；触发时跳到 1.5 弹回） */
   private comboPop = 1;
   private perfectFlashT = 0;
@@ -82,7 +84,7 @@ export class HUD {
     const bw = 300 * uiScale;
     const bh = 15 * uiScale;
     const bx = this.w / 2 - bw / 2;
-    const by = 18 * uiScale;
+    const by = 18 * uiScale + this.inset.t;
 
     // 底槽
     ctx.fillStyle = 'rgba(48,30,24,0.4)';
@@ -147,16 +149,16 @@ export class HUD {
     ctx.textAlign = 'left';
     ctx.fillStyle = 'rgba(56,34,28,0.85)';
     ctx.font = `900 ${30 * uiScale}px system-ui`;
-    ctx.fillText(`${Math.floor(s.score)}`, 22 * uiScale, 30 * uiScale);
+    ctx.fillText(`${Math.floor(s.score)}`, 22 * uiScale + this.inset.l, 30 * uiScale + this.inset.t);
     // 金币
-    this.drawCoinIcon(ctx, 26 * uiScale, 58 * uiScale, 8 * uiScale);
+    this.drawCoinIcon(ctx, 26 * uiScale + this.inset.l, 58 * uiScale + this.inset.t, 8 * uiScale);
     ctx.fillStyle = 'rgba(56,34,28,0.8)';
     ctx.font = `700 ${16 * uiScale}px system-ui`;
-    ctx.fillText(`${s.coins}`, 42 * uiScale, 58 * uiScale);
+    ctx.fillText(`${s.coins}`, 42 * uiScale + this.inset.l, 58 * uiScale + this.inset.t);
     // 关卡
     ctx.fillStyle = 'rgba(56,34,28,0.55)';
     ctx.font = `700 ${12 * uiScale}px system-ui`;
-    ctx.fillText(`第 ${s.level} 天 · ${themeForLevel(s.themeLevel ?? s.level).name}`, 22 * uiScale, 80 * uiScale);
+    ctx.fillText(`第 ${s.level} 天 · ${themeForLevel(s.themeLevel ?? s.level).name}`, 22 * uiScale + this.inset.l, 80 * uiScale + this.inset.t);
 
     // ===== 日落倒计时（右上） =====
     const dusk = s.sunsetT <= 15;
@@ -164,20 +166,20 @@ export class HUD {
     ctx.textAlign = 'right';
     ctx.fillStyle = tColor;
     ctx.font = `900 ${26 * uiScale}px system-ui`;
-    ctx.fillText(`${s.sunsetT.toFixed(1)}s`, this.w - 24 * uiScale, 30 * uiScale);
+    ctx.fillText(`${s.sunsetT.toFixed(1)}s`, this.w - 24 * uiScale - this.inset.r, 30 * uiScale + this.inset.t);
     // 太阳小图标
-    this.drawSunIcon(ctx, this.w - 24 * uiScale - ctx.measureText(`${s.sunsetT.toFixed(1)}s`).width - 22 * uiScale, 30 * uiScale, 10 * uiScale, 1 - s.sunsetT / s.sunsetDur);
+    this.drawSunIcon(ctx, this.w - 24 * uiScale - this.inset.r - ctx.measureText(`${s.sunsetT.toFixed(1)}s`).width - 22 * uiScale, 30 * uiScale + this.inset.t, 10 * uiScale, 1 - s.sunsetT / s.sunsetDur);
     // 巢穴距离
     ctx.fillStyle = 'rgba(56,34,28,0.7)';
     ctx.font = `700 ${15 * uiScale}px system-ui`;
-    ctx.fillText(`巢 ${Math.ceil(s.nestDistanceM)}m`, this.w - 24 * uiScale, 58 * uiScale);
+    ctx.fillText(`巢 ${Math.ceil(s.nestDistanceM)}m`, this.w - 24 * uiScale - this.inset.r, 58 * uiScale + this.inset.t);
     // 实时高度 + 境界（高空才显示 —— 余光即可确认「现在在哪一层」）
     if (s.agl > 150) {
       const ri = realmIndex(s.agl);
       const climbing = Math.sin(time * 6) > 0;
       ctx.fillStyle = ri >= 3 ? 'rgba(70,90,160,0.95)' : 'rgba(56,34,28,0.65)';
       ctx.font = `800 ${15 * uiScale}px system-ui`;
-      ctx.fillText(`${climbing ? '↗' : '↘'} ${s.agl | 0} · ${REALMS[ri].name}`, this.w - 24 * uiScale, 82 * uiScale);
+      ctx.fillText(`${climbing ? '↗' : '↘'} ${s.agl | 0} · ${REALMS[ri].name}`, this.w - 24 * uiScale - this.inset.r, 82 * uiScale + this.inset.t);
     }
 
     // ===== Combo（热度条下方中央） =====

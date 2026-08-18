@@ -72,7 +72,14 @@ export class App {
   /** 教学：首局状态浮标 */
   private tut = { hold: false, release: false, t: 0 };
   private appTime = 0;
-  private paused = false;
+  /** 暂停三源 */
+  private hidden = false;
+  private portrait = false;
+  private userPaused = false;
+  /** 触摸设备（手机/平板） */
+  private coarse = false;
+  private portraitMq!: MediaQueryList;
+  private mobileEnhanced = false;
   /** attract 输入相位 */
   private attractT = 0;
 
@@ -98,8 +105,19 @@ export class App {
     if (this.urlCfg.debug) this.debug.on = true;
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 120));
+    // 暂停三源：页面隐藏 / 竖屏（仅触摸设备）/ 手动 P 键
     document.addEventListener('visibilitychange', () => {
-      this.setPaused(document.hidden);
+      this.hidden = document.hidden;
+      this.applyPause();
+    });
+    // 触摸设备：竖屏视为「不可玩」，自动暂停（配合旋转提示遮罩）
+    this.coarse = matchMedia('(pointer: coarse)').matches;
+    this.portraitMq = matchMedia('(orientation: portrait)');
+    this.portrait = this.coarse && this.portraitMq.matches;
+    this.portraitMq.addEventListener('change', () => {
+      this.portrait = this.coarse && this.portraitMq.matches;
+      this.applyPause();
     });
   }
 
@@ -108,8 +126,13 @@ export class App {
   }
 
   private setPaused(p: boolean): void {
-    this.paused = p;
+
     this.loop.setPaused(p);
+  }
+
+  /** 暂停三源合并（hidden / portrait / userPaused） */
+  private applyPause(): void {
+    this.setPaused(this.hidden || this.portrait || this.userPaused);
   }
 
   private resize(): void {
@@ -119,6 +142,40 @@ export class App {
     this.canvas.width = Math.floor(w * dpr);
     this.canvas.height = Math.floor(h * dpr);
     this.renderer.resize(w, h, dpr);
+    // 刘海屏安全区（iOS notch / Android 打孔）：HUD 角落元素避开
+    const probe = document.getElementById('safe-probe');
+    if (probe) {
+      const cs = getComputedStyle(probe);
+      this.renderer.hud.inset = {
+        l: parseFloat(cs.paddingLeft) || 0,
+        t: parseFloat(cs.paddingTop) || 0,
+        r: parseFloat(cs.paddingRight) || 0,
+      };
+    }
+  }
+
+  /** 移动端首次手势增强：全屏 + 尝试锁定横屏（iOS 不支持则由旋转遮罩引导） */
+  private mobileEnhance(): void {
+    if (this.mobileEnhanced || !this.coarse) return;
+    this.mobileEnhanced = true;
+    try {
+      const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+      const req: Promise<void> | undefined = el.requestFullscreen
+        ? el.requestFullscreen({ navigationUI: 'hide' })
+        : el.webkitRequestFullscreen
+          ? el.webkitRequestFullscreen()
+          : undefined;
+      if (req) {
+        req
+          .then(() => {
+            const orient = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+            return orient.lock?.('landscape');
+          })
+          .catch(() => {}); // 桌面 / iPad / 拒绝授权 —— 静默降级
+      }
+    } catch {
+      /* 静默降级 */
+    }
   }
 
   /* ---------------- 功能键（与玩法输入分离） ---------------- */
@@ -137,7 +194,8 @@ export class App {
       } else if (e.code === 'KeyM') {
         this.audio.setMuted(!this.audio.muted);
       } else if (e.code === 'KeyP') {
-        this.setPaused(!this.paused);
+        this.userPaused = !this.userPaused;
+        this.applyPause();
       } else if (e.code === 'KeyR') {
         if (this.scene === 'play' || this.scene === 'over') this.restartRun();
       }
@@ -247,6 +305,7 @@ export class App {
   private demoTakeover(): void {
     this.urlCfg.demo = false;
     this.audio.unlock();
+    this.mobileEnhance();
     this.bgm.start();
     this.input.resetRecorder();
     this.input.recording = true;
@@ -359,6 +418,7 @@ export class App {
         }
       } else if (this.input.anyPress) {
         this.audio.unlock();
+        this.mobileEnhance();
         this.bgm.start();
         this.startRun(this.runSeed);
       }
