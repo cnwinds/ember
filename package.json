@@ -1,0 +1,19 @@
+{
+  "name": "ember",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "熔岩尾焰鸟 Ember — 单键节奏滑行游戏（Vite + TS + Canvas2D，零运行时依赖）",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.2",
+    "vite": "^5.4.8",
+    "vitest": "^2.1.1"
+  }
+}
