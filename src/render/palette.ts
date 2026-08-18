@@ -5,8 +5,9 @@
  *   蓝 #4FC3F7 → 黄 #FFD54F → 红 #FF5252 → 白 #FFFFFF，随热度连续 lerp，禁止阶跃。
  *   HUD 热度条与尾焰粒子共用同一 ramp —— 玩家用余光读热度。
  *
- * 天空采用 Alto's Odyssey 式「暖到冷」分层，随 dayProgress（0 清晨 → 1 日落）连续插值；
- * 最后 15 秒（p≈0.8+）进入深红危机阶段。
+ * 手绘绘本画风（Tiny Wings 式）：无描边、柔和渐变天空、丘陵沿水平方向
+ * 以 hillA/hillB/hillC 三色平滑循环（条纹彩色山丘）。昼夜随 dayProgress
+ * （0 清晨 → 1 日落）连续插值；最后 15 秒（p≈0.8+）进入深红危机阶段。
  */
 
 import { rampColor, lerp, hexToRgb, rgba } from '../core/mathutil';
@@ -47,7 +48,12 @@ export interface SkyKey {
   ridgeMid: string;
   snow: string;
   snowShade: string;
-  snowOutline: string;
+  /** 丘陵渐变暗部（无描边时代的「底纵深」色） */
+  snowDeep: string;
+  /** 丘陵轮廓条纹三色组（沿地表平行展开，色序随世界 x 轮转） */
+  hillA: string;
+  hillB: string;
+  hillC: string;
   rock: string;
   rockShade: string;
   fg: string;
@@ -58,32 +64,37 @@ export interface SkyKey {
 const KEYS: SkyKey[] = [
   {
     p: 0,
-    top: '#7ec9ea', mid: '#bfe3ef', horizon: '#ffe9c0', sun: '#fff6d8', sunRim: '#ffdf9e',
-    ridgeFar: '#b9d3e4', ridgeMid: '#93b7d6', snow: '#f7f0e4', snowShade: '#e7d8c4', snowOutline: '#cdb9a2',
+    top: '#7ec9ea', mid: '#c4e6ef', horizon: '#ffedc6', sun: '#fff6d8', sunRim: '#ffdf9e',
+    ridgeFar: '#b9d3e4', ridgeMid: '#93b7d6', snow: '#f7f0e4', snowShade: '#e7d8c4', snowDeep: '#b8a488',
+    hillA: '#ecdfc6', hillB: '#e0d4b4', hillC: '#e6d2b8',
     rock: '#93826f', rockShade: '#74655a', fg: '#e8d9c8', cloud: '#fff6ea', cloudShade: '#eeddc8',
   },
   {
     p: 0.45,
-    top: '#7fa9d6', mid: '#d3dcc2', horizon: '#ffd9a0', sun: '#ffe9b8', sunRim: '#ffc98a',
-    ridgeFar: '#a9beda', ridgeMid: '#8fa8ce', snow: '#f6ecdd', snowShade: '#e2cfb8', snowOutline: '#c9b099',
+    top: '#7fa9d6', mid: '#d6dfbc', horizon: '#ffdba4', sun: '#ffe9b8', sunRim: '#ffc98a',
+    ridgeFar: '#a9beda', ridgeMid: '#8fa8ce', snow: '#f6ecdd', snowShade: '#e2cfb8', snowDeep: '#b39a82',
+    hillA: '#e8d9b6', hillB: '#dbcaa5', hillC: '#e1cc9f',
     rock: '#8e7c6a', rockShade: '#6f6055', fg: '#e4d2c0', cloud: '#ffefdd', cloudShade: '#ecd7c0',
   },
   {
     p: 0.72,
-    top: '#6d7fbe', mid: '#e9a97c', horizon: '#ffad6e', sun: '#ffd9a0', sunRim: '#ff9e6e',
-    ridgeFar: '#9398c4', ridgeMid: '#7a7cb2', snow: '#f4e4ce', snowShade: '#dcc2a6', snowOutline: '#bfa184',
+    top: '#6d7fbe', mid: '#ecac7e', horizon: '#ffad6e', sun: '#ffd9a0', sunRim: '#ff9e6e',
+    ridgeFar: '#9398c4', ridgeMid: '#7a7cb2', snow: '#f4e4ce', snowShade: '#dcc2a6', snowDeep: '#a98e74',
+    hillA: '#e3c9a2', hillB: '#d4b78e', hillC: '#dcbe96',
     rock: '#87745f', rockShade: '#685a4c', fg: '#d9bfae', cloud: '#ffd9c0', cloudShade: '#e5bfa4',
   },
   {
     p: 0.88,
     top: '#4e4a82', mid: '#d97c63', horizon: '#e8543f', sun: '#ff9e6e', sunRim: '#ff7a54',
-    ridgeFar: '#6f6d9e', ridgeMid: '#5c5a8e', snow: '#e8d2be', snowShade: '#c4a38c', snowOutline: '#9c7a62',
+    ridgeFar: '#6f6d9e', ridgeMid: '#5c5a8e', snow: '#e8d2be', snowShade: '#c4a38c', snowDeep: '#886a56',
+    hillA: '#d4ad8c', hillB: '#c39678', hillC: '#cda080',
     rock: '#7d6a58', rockShade: '#5f5245', fg: '#c6a392', cloud: '#e8b09a', cloudShade: '#c68d7a',
   },
   {
     p: 1,
     top: '#3a2c55', mid: '#8e4257', horizon: '#b03a48', sun: '#e86a54', sunRim: '#c84a44',
-    ridgeFar: '#565178', ridgeMid: '#494568', snow: '#d8c2b2', snowShade: '#b09284', snowOutline: '#8a6a5c',
+    ridgeFar: '#565178', ridgeMid: '#494568', snow: '#d8c2b2', snowShade: '#b09284', snowDeep: '#785c50',
+    hillA: '#ba8b7c', hillB: '#a6736d', hillC: '#b68176',
     rock: '#6e5d50', rockShade: '#524639', fg: '#b0918a', cloud: '#b98a8a', cloudShade: '#9a6a6e',
   },
 ];
@@ -111,7 +122,10 @@ function mixKey(a: SkyKey, b: SkyKey, t: number): SkyPalette {
     ridgeMid: mix(a.ridgeMid, b.ridgeMid),
     snow: mix(a.snow, b.snow),
     snowShade: mix(a.snowShade, b.snowShade),
-    snowOutline: mix(a.snowOutline, b.snowOutline),
+    snowDeep: mix(a.snowDeep, b.snowDeep),
+    hillA: mix(a.hillA, b.hillA),
+    hillB: mix(a.hillB, b.hillB),
+    hillC: mix(a.hillC, b.hillC),
     rock: mix(a.rock, b.rock),
     rockShade: mix(a.rockShade, b.rockShade),
     fg: mix(a.fg, b.fg),
@@ -140,12 +154,21 @@ export function skyAt(dayProgress: number): SkyPalette {
   return out;
 }
 
-/** rgb 三元组字符串 → rgba(...,a) */
+const withACache = new Map<string, string>();
+/** rgb 三元组字符串 → rgba(...,a)（透明度量化 24 档 + memo：调色板按 101 档缓变，命中率极高） */
 export function withA(rgb: string, a: number): string {
-  return `rgba(${rgb},${a.toFixed(3)})`;
+  const q = Math.max(0, Math.min(1, a));
+  const key = `${rgb}|${Math.round(q * 24)}`;
+  let s = withACache.get(key);
+  if (s === undefined) {
+    s = `rgba(${rgb},${(q).toFixed(3)})`;
+    if (withACache.size > 512) withACache.clear();
+    withACache.set(key, s);
+  }
+  return s;
 }
 
-/** 赛璐璐调色：对 'r,g,b' 或 'rgb(r,g,b)' 字符串做硬性明暗（k<1 压暗 / k>1 提亮），无渐变 */
+/** 明暗派生（柔和渐变的色标来源）：对 'r,g,b' 或 'rgb(r,g,b)' 字符串做明暗（k<1 压暗 / k>1 提亮） */
 export function shadeRGB(rgb: string, k: number): string {
   const m = rgb.replace('rgb(', '').replace(')', '');
   const [r, g, b] = m.split(',').map(Number);
@@ -167,35 +190,35 @@ export interface ThemeDef {
 export const THEMES: ThemeDef[] = [
   {
     name: '晨曦草原', strength: 0.5,
-    fields: { horizon: '#ffd9b0', ridgeFar: '#8fb8a8', ridgeMid: '#6e9c8a', snow: '#f3f0e2', snowShade: '#dfd2c0' },
+    fields: { horizon: '#ffd9b0', ridgeFar: '#8fb8a8', ridgeMid: '#6e9c8a', snow: '#f3f0e2', snowShade: '#dfd2c0', hillA: '#86cc7e', hillB: '#d4e488', hillC: '#66bfa9' },
   },
   {
     name: '金穗丘陵', strength: 0.55,
-    fields: { horizon: '#ffcf7a', ridgeFar: '#c9b06a', ridgeMid: '#a98f52', snow: '#f6ecd2', snowShade: '#e2d0a8', cloud: '#fff2d8' },
+    fields: { horizon: '#ffcf7a', ridgeFar: '#c9b06a', ridgeMid: '#a98f52', snow: '#f6ecd2', snowShade: '#e2d0a8', cloud: '#fff2d8', hillA: '#e8c46a', hillB: '#d5a44a', hillC: '#efdc96' },
   },
   {
     name: '珊瑚沙谷', strength: 0.55,
-    fields: { horizon: '#ffb4a2', ridgeFar: '#cf9a9c', ridgeMid: '#a87780', snow: '#f5e6e0', snowShade: '#e0c8c2' },
+    fields: { horizon: '#ffb4a2', ridgeFar: '#cf9a9c', ridgeMid: '#a87780', snow: '#f5e6e0', snowShade: '#e0c8c2', hillA: '#f0a48e', hillB: '#e6867e', hillC: '#f4c6a4' },
   },
   {
     name: '翠风峡湾', strength: 0.55,
-    fields: { top: '#7fc4c0', mid: '#bfe0d2', horizon: '#f2e8c8', ridgeFar: '#7ab8a6', ridgeMid: '#52907e', snow: '#eef5ea', snowShade: '#d5e2d4' },
+    fields: { top: '#7fc4c0', mid: '#bfe0d2', horizon: '#f2e8c8', ridgeFar: '#7ab8a6', ridgeMid: '#52907e', snow: '#eef5ea', snowShade: '#d5e2d4', hillA: '#78c6a0', hillB: '#56a688', hillC: '#b4dc9c' },
   },
   {
     name: '赤岩火山', strength: 0.6,
-    fields: { horizon: '#ff9a5c', ridgeFar: '#b07a80', ridgeMid: '#8a5a62', snow: '#f0dcc8', snowShade: '#d4b49a', snowOutline: '#9a6a50' },
+    fields: { horizon: '#ff9a5c', ridgeFar: '#b07a80', ridgeMid: '#8a5a62', snow: '#f0dcc8', snowShade: '#d4b49a', snowDeep: '#8a5a44', hillA: '#dd885a', hillB: '#c0684e', hillC: '#ecae7c' },
   },
   {
     name: '薄暮紫原', strength: 0.6,
-    fields: { top: '#8a7ab8', mid: '#c2a8cc', horizon: '#e8a8c0', ridgeFar: '#8a7ca8', ridgeMid: '#6a5e88', snow: '#ece6f0', snowShade: '#d2c8dc' },
+    fields: { top: '#8a7ab8', mid: '#c2a8cc', horizon: '#e8a8c0', ridgeFar: '#8a7ca8', ridgeMid: '#6a5e88', snow: '#ece6f0', snowShade: '#d2c8dc', hillA: '#b296ce', hillB: '#987cb4', hillC: '#ceb4da' },
   },
   {
     name: '极夜冰原', strength: 0.6,
-    fields: { top: '#9ab8d8', mid: '#d0e0ea', horizon: '#f0e8ea', ridgeFar: '#a8c4dc', ridgeMid: '#7ea0c0', snow: '#f0f6fa', snowShade: '#d8e4ee' },
+    fields: { top: '#9ab8d8', mid: '#d0e0ea', horizon: '#f0e8ea', ridgeFar: '#a8c4dc', ridgeMid: '#7ea0c0', snow: '#f0f6fa', snowShade: '#d8e4ee', hillA: '#cce2ee', hillB: '#a6c6da', hillC: '#e2eef2' },
   },
   {
     name: '星海之巅', strength: 0.65,
-    fields: { top: '#4a4a7c', mid: '#7c6a9c', horizon: '#c07a88', ridgeFar: '#5c5880', ridgeMid: '#484468', snow: '#dcd8e8', snowShade: '#c0bcd4' },
+    fields: { top: '#4a4a7c', mid: '#7c6a9c', horizon: '#c07a88', ridgeFar: '#5c5880', ridgeMid: '#484468', snow: '#dcd8e8', snowShade: '#c0bcd4', hillA: '#8884b6', hillB: '#68649a', hillC: '#a69cc6' },
   },
 ];
 
@@ -210,14 +233,17 @@ function mixRgbStr(a: string, b: string, t: number): string {
   return `${Math.round(pa[0] + (pb[0] - pa[0]) * t)},${Math.round(pa[1] + (pb[1] - pa[1]) * t)},${Math.round(pa[2] + (pb[2] - pa[2]) * t)}`;
 }
 
-/** 将主题色分级应用到一个调色板（原地修改；k 为主题权重 0..1） */
+/** 将主题色分级应用到一个调色板（原地修改；k 为主题权重 0..1）。
+ *  hillA/B/C（山丘条纹主色）用更高强度 —— Tiny Wings 式山丘需要高饱和度，
+ *  若按普通强度与基础米色混合会褪成淡彩色。 */
 export function applyTheme(pal: SkyPalette, theme: ThemeDef, k: number): void {
   if (k <= 0) return;
   const eff = theme.strength * k;
   for (const key of Object.keys(theme.fields) as Array<keyof SkyPalette>) {
     const hex = theme.fields[key as keyof typeof theme.fields];
     if (typeof hex !== 'string' || typeof pal[key] !== 'string') continue;
-    (pal as unknown as Record<string, string>)[key] = mixRgbStr(pal[key] as string, hexToRgb(hex).join(','), eff);
+    const w = key === 'hillA' || key === 'hillB' || key === 'hillC' ? Math.min(1, eff + 0.42) : eff;
+    (pal as unknown as Record<string, string>)[key] = mixRgbStr(pal[key] as string, hexToRgb(hex).join(','), w);
   }
 }
 

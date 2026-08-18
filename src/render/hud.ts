@@ -85,7 +85,7 @@ export class HUD {
     const by = 18 * uiScale;
 
     // 底槽
-    ctx.fillStyle = 'rgba(24,14,20,0.45)';
+    ctx.fillStyle = 'rgba(48,30,24,0.4)';
     this.roundRect(ctx, bx - 3, by - 3, bw + 6, bh + 6, 9 * uiScale);
     ctx.fill();
 
@@ -145,22 +145,22 @@ export class HUD {
 
     // ===== 分数（左上） =====
     ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(46,32,40,0.85)';
+    ctx.fillStyle = 'rgba(56,34,28,0.85)';
     ctx.font = `900 ${30 * uiScale}px system-ui`;
     ctx.fillText(`${Math.floor(s.score)}`, 22 * uiScale, 30 * uiScale);
     // 金币
     this.drawCoinIcon(ctx, 26 * uiScale, 58 * uiScale, 8 * uiScale);
-    ctx.fillStyle = 'rgba(46,32,40,0.8)';
+    ctx.fillStyle = 'rgba(56,34,28,0.8)';
     ctx.font = `700 ${16 * uiScale}px system-ui`;
     ctx.fillText(`${s.coins}`, 42 * uiScale, 58 * uiScale);
     // 关卡
-    ctx.fillStyle = 'rgba(46,32,40,0.55)';
+    ctx.fillStyle = 'rgba(56,34,28,0.55)';
     ctx.font = `700 ${12 * uiScale}px system-ui`;
     ctx.fillText(`第 ${s.level} 天 · ${themeForLevel(s.themeLevel ?? s.level).name}`, 22 * uiScale, 80 * uiScale);
 
     // ===== 日落倒计时（右上） =====
     const dusk = s.sunsetT <= 15;
-    const tColor = dusk ? (Math.sin(time * 8) > 0 ? 'rgba(232,64,54,1)' : 'rgba(160,40,44,1)') : 'rgba(46,32,40,0.85)';
+    const tColor = dusk ? (Math.sin(time * 8) > 0 ? 'rgba(232,64,54,1)' : 'rgba(160,40,44,1)') : 'rgba(56,34,28,0.85)';
     ctx.textAlign = 'right';
     ctx.fillStyle = tColor;
     ctx.font = `900 ${26 * uiScale}px system-ui`;
@@ -168,14 +168,14 @@ export class HUD {
     // 太阳小图标
     this.drawSunIcon(ctx, this.w - 24 * uiScale - ctx.measureText(`${s.sunsetT.toFixed(1)}s`).width - 22 * uiScale, 30 * uiScale, 10 * uiScale, 1 - s.sunsetT / s.sunsetDur);
     // 巢穴距离
-    ctx.fillStyle = 'rgba(46,32,40,0.7)';
+    ctx.fillStyle = 'rgba(56,34,28,0.7)';
     ctx.font = `700 ${15 * uiScale}px system-ui`;
     ctx.fillText(`巢 ${Math.ceil(s.nestDistanceM)}m`, this.w - 24 * uiScale, 58 * uiScale);
     // 实时高度 + 境界（高空才显示 —— 余光即可确认「现在在哪一层」）
     if (s.agl > 150) {
       const ri = realmIndex(s.agl);
       const climbing = Math.sin(time * 6) > 0;
-      ctx.fillStyle = ri >= 3 ? 'rgba(70,90,160,0.95)' : 'rgba(46,32,40,0.65)';
+      ctx.fillStyle = ri >= 3 ? 'rgba(70,90,160,0.95)' : 'rgba(56,34,28,0.65)';
       ctx.font = `800 ${15 * uiScale}px system-ui`;
       ctx.fillText(`${climbing ? '↗' : '↘'} ${s.agl | 0} · ${REALMS[ri].name}`, this.w - 24 * uiScale, 82 * uiScale);
     }
@@ -186,8 +186,8 @@ export class HUD {
       ctx.translate(this.w / 2, by + bh + 34 * uiScale);
       ctx.scale(this.comboPop, this.comboPop);
       ctx.textAlign = 'center';
-      ctx.fillStyle = s.fever ? '#ffffff' : 'rgba(46,32,40,0.9)';
-      ctx.strokeStyle = 'rgba(46,32,40,0.35)';
+      ctx.fillStyle = s.fever ? '#ffffff' : 'rgba(56,34,28,0.9)';
+      ctx.strokeStyle = 'rgba(56,34,28,0.35)';
       ctx.lineWidth = 1.5;
       ctx.font = `900 ${26 * uiScale}px system-ui`;
       ctx.fillText(`×${s.combo}`, 0, 0);
@@ -248,21 +248,21 @@ export class HUD {
     // 标题
     const ty = this.h * 0.3 + Math.sin(time * 1.4) * 6;
     ctx.font = `900 ${Math.min(84, this.w * 0.09)}px system-ui`;
-    ctx.fillStyle = 'rgba(60,36,46,0.92)';
+    ctx.fillStyle = 'rgba(64,38,32,0.92)';
     ctx.fillText('熔岩尾焰鸟', cx, ty);
     ctx.font = `800 ${Math.min(26, this.w * 0.03)}px system-ui`;
-    ctx.fillStyle = 'rgba(60,36,46,0.6)';
+    ctx.fillStyle = 'rgba(64,38,32,0.6)';
     ctx.fillText('EMBER', cx, ty + 42);
     // 操作提示（无教程文字原则：图标 + 动词）
     const hy = this.h * 0.62;
     ctx.font = `700 ${17}px system-ui`;
-    ctx.fillStyle = 'rgba(60,36,46,0.8)';
+    ctx.fillStyle = 'rgba(64,38,32,0.8)';
     ctx.fillText('按住 —— 俯冲加速 · 松开 —— 展翅散热', cx, hy);
-    ctx.fillStyle = 'rgba(60,36,46,0.55)';
+    ctx.fillStyle = 'rgba(64,38,32,0.55)';
     ctx.font = `600 ${14}px system-ui`;
     ctx.fillText(`${daily ? '每日挑战 · ' : ''}空格 / 触屏 开始`, cx, hy + 30);
     if (best > 0) {
-      ctx.fillStyle = 'rgba(60,36,46,0.5)';
+      ctx.fillStyle = 'rgba(64,38,32,0.5)';
       ctx.fillText(`最佳 ${Math.floor(best)}`, cx, hy + 56);
     }
     ctx.restore();
@@ -317,11 +317,11 @@ export class HUD {
     ctx.save();
     ctx.textAlign = 'center';
     ctx.globalAlpha = a;
-    ctx.fillStyle = 'rgba(70,40,50,0.9)';
+    ctx.fillStyle = 'rgba(74,42,34,0.9)';
     ctx.font = `900 ${40}px system-ui`;
     ctx.fillText(`第 ${level} 天 · 日落归巢`, this.w / 2, this.h * 0.34);
     ctx.font = `700 ${18}px system-ui`;
-    ctx.fillStyle = 'rgba(90,52,60,0.8)';
+    ctx.fillStyle = 'rgba(94,56,44,0.8)';
     ctx.fillText('新的一天开始了', this.w / 2, this.h * 0.34 + 34);
     ctx.restore();
   }

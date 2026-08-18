@@ -11,7 +11,7 @@
  */
 
 import { PARTICLES } from '../core/constants';
-import { clamp } from '../core/mathutil';
+import { clamp, rampColor } from '../core/mathutil';
 import { flameBucket } from './palette';
 
 export type PKind = 'flame' | 'steam' | 'snow' | 'magma' | 'spark';
@@ -35,6 +35,16 @@ interface P {
 }
 
 const MAX = PARTICLES.TOTAL_MAX;
+
+/** 岩浆连续色阶（亮黄 → 橙红 → 深红），12 桶缓存避免字符串 churn */
+const MAGMA_STOPS: Array<[number, number, number, number]> = [
+  [0.0, 0xff, 0xca, 0x28],
+  [0.4, 0xff, 0x70, 0x43],
+  [1.0, 0xd8, 0x43, 0x15],
+];
+const MAGMA_BUCKETS = 12;
+const magmaColors: string[] = [];
+for (let i = 0; i < MAGMA_BUCKETS; i++) magmaColors.push(rampColor(MAGMA_STOPS, i / (MAGMA_BUCKETS - 1)));
 
 export interface Ring {
   x: number;
@@ -247,80 +257,93 @@ export class ParticlePool {
   }
 
   /** 绘制（世界坐标系下调用；ctx 已被相机变换）。
-   *  赛璐璐：所有透明度量化为 2 档 —— 无柔和淡出，扁平色块的生命感 */
+   *  性能：按「颜色桶 × 透明度桶」分组批量绘制（每桶一次 fill），
+   *  把最坏 ~900 次逐粒子 fill 压到 ~20 次；透明度量化 12 档视觉不可辨 */
   draw(ctx: CanvasRenderingContext2D): void {
     const m = PARTICLES.CULL_MARGIN;
-    const qa = (a: number) => Math.round(a * 2) / 2; // 透明度量化（0/0.5/1）
-    // 蒸汽（最底）
+    const AB = 12; // 透明度桶数
+    // 分组桶（惰性创建；绘制后清空复用，零持续分配）
+    const white: P[][] = [];
+    const flame: P[][] = [];
+    const magma: P[][] = [];
+    const spark: P[][] = [];
+    const alphaIdx = (a: number) => Math.max(0, Math.min(AB - 1, (a * AB) | 0));
+
+    for (const s of this.slots) {
+      if (!s.alive) continue;
+      if (s.x < this.viewX0 - m || s.x > this.viewX1 + m) continue;
+      const t = 1 - s.life / s.maxLife;
+      let gi: number;
+      if (s.kind === 'flame') {
+        const heatT = clamp(s.heat01 * (1 - t * 0.25) + t * 0.35, 0, 1);
+        const cb = Math.round(heatT * 23); // 与 flameBucket 相同的 24 档
+        gi = cb * AB + alphaIdx(0.85 * (1 - t) * (1 - t));
+        (flame[gi] ??= []).push(s);
+      } else if (s.kind === 'magma') {
+        const cb = Math.min(11, Math.round(t * 11));
+        gi = cb * AB + alphaIdx(0.95 * (1 - t));
+        (magma[gi] ??= []).push(s);
+      } else if (s.kind === 'spark') {
+        (spark[alphaIdx(1 - t)] ??= []).push(s);
+      } else {
+        // steam / snow：同为白色圆，合并按透明度分桶
+        const a = s.kind === 'steam' ? 0.32 * (1 - t) : 0.5 * (1 - t);
+        (white[alphaIdx(a)] ??= []).push(s);
+      }
+    }
+
+    // ---- 批量绘制：每桶一次 beginPath + fill ----
+    const drawCircles = (groups: P[][], colorOf: (gi: number) => string, radiusOf: (s: P, t: number) => number) => {
+      for (let gi = 0; gi < groups.length; gi++) {
+        const arr = groups[gi];
+        if (arr === undefined) continue;
+        ctx.fillStyle = colorOf(gi);
+        ctx.globalAlpha = ((gi % AB) + 0.5) / AB;
+        ctx.beginPath();
+        for (const s of arr) {
+          const t = 1 - s.life / s.maxLife;
+          const r = radiusOf(s, t);
+          ctx.moveTo(s.x + r, s.y);
+          ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        arr.length = 0;
+      }
+    };
+
+    // 白色（蒸汽 + 雪雾，最底）
     ctx.fillStyle = '#ffffff';
-    for (const s of this.slots) {
-      if (!s.alive || s.kind !== 'steam') continue;
-      if (s.x < this.viewX0 - m || s.x > this.viewX1 + m) continue;
-      const t = 1 - s.life / s.maxLife;
-      const r = s.size0 + (s.size1 - s.size0) * t;
-      ctx.globalAlpha = qa(0.32 * (1 - t));
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // 雪雾
-    ctx.fillStyle = '#ffffff';
-    for (const s of this.slots) {
-      if (!s.alive || s.kind !== 'snow') continue;
-      if (s.x < this.viewX0 - m || s.x > this.viewX1 + m) continue;
-      const t = 1 - s.life / s.maxLife;
-      ctx.globalAlpha = qa(0.5 * (1 - t));
-      const r = s.size0 * (1 - t * 0.5);
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // 尾焰（分桶颜色 + 量化透明度，避免字符串 churn）
-    for (const s of this.slots) {
-      if (!s.alive || s.kind !== 'flame') continue;
-      if (s.x < this.viewX0 - m || s.x > this.viewX1 + m) continue;
-      const t = 1 - s.life / s.maxLife;
-      // 颜色连续：出生热度 → 随寿命向亮端漂移（火舌核心更热）
-      const heatT = clamp(s.heat01 * (1 - t * 0.25) + t * 0.35, 0, 1);
-      ctx.fillStyle = flameBucket(heatT);
-      ctx.globalAlpha = qa(0.85 * (1 - t) * (1 - t));
-      const r = s.size0 * (1 - t * 0.7) + s.size1;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // 岩浆
-    for (const s of this.slots) {
-      if (!s.alive || s.kind !== 'magma') continue;
-      if (s.x < this.viewX0 - m || s.x > this.viewX1 + m) continue;
-      const t = 1 - s.life / s.maxLife;
-      ctx.fillStyle = t < 0.4 ? '#ffca28' : t < 0.75 ? '#ff7043' : '#d84315';
-      ctx.globalAlpha = qa(0.95 * (1 - t));
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.size0 * (1 - t * 0.6), 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // 火花（小十字更「手绘」而非裸圆）
+    drawCircles(white, () => '#ffffff', (s, t) =>
+      s.kind === 'steam' ? s.size0 + (s.size1 - s.size0) * t : s.size0 * (1 - t * 0.5)
+    );
+    // 尾焰（分桶颜色，flameBucket 自带 24 档缓存）
+    drawCircles(flame, (gi) => flameBucket(((gi / AB) | 0) / 23), (s, t) => s.size0 * (1 - t * 0.7) + s.size1);
+    // 岩浆（连续色阶）
+    drawCircles(magma, (gi) => magmaColors[(gi / AB) | 0], (s, t) => s.size0 * (1 - t * 0.6));
+    // 火花（小十字，按透明度分桶批量 stroke）
     ctx.strokeStyle = '#ffe08a';
     ctx.lineWidth = 2;
-    for (const s of this.slots) {
-      if (!s.alive || s.kind !== 'spark') continue;
-      if (s.x < this.viewX0 - m || s.x > this.viewX1 + m) continue;
-      const t = 1 - s.life / s.maxLife;
-      const r = s.size0 * (1 - t);
-      ctx.globalAlpha = qa(1 - t);
+    for (let gi = 0; gi < spark.length; gi++) {
+      const arr = spark[gi];
+      if (arr === undefined) continue;
+      ctx.globalAlpha = (gi + 0.5) / AB;
       ctx.beginPath();
-      ctx.moveTo(s.x - r, s.y);
-      ctx.lineTo(s.x + r, s.y);
-      ctx.moveTo(s.x, s.y - r);
-      ctx.lineTo(s.x, s.y + r);
+      for (const s of arr) {
+        const t = 1 - s.life / s.maxLife;
+        const r = s.size0 * (1 - t);
+        ctx.moveTo(s.x - r, s.y);
+        ctx.lineTo(s.x + r, s.y);
+        ctx.moveTo(s.x, s.y - r);
+        ctx.lineTo(s.x, s.y + r);
+      }
       ctx.stroke();
+      arr.length = 0;
     }
-    // 圆环（完美着陆蒸汽环）
+    // 圆环（完美着陆蒸汽环，数量极少，逐个绘制）
     ctx.lineWidth = 3;
     for (const ring of this.rings) {
       const t = ring.t / ring.dur;
-      ctx.globalAlpha = qa(0.7 * (1 - t));
+      ctx.globalAlpha = 0.7 * (1 - t);
       ctx.strokeStyle = ring.color;
       ctx.beginPath();
       ctx.arc(ring.x, ring.y, ring.r0 + (ring.r1 - ring.r0) * t, 0, Math.PI * 2);

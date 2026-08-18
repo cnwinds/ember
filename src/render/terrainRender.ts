@@ -1,9 +1,9 @@
 /**
- * TerrainRender —— 手绘感地形渲染（世界坐标系，相机已应用）。
+ * TerrainRender —— 手绘绘本地形渲染（世界坐标系，相机已应用）。
  *
- * - 多层贝塞尔式平滑山丘 + 2px 手绘抖动描边（确定性噪声，幅度 ≤1.5px，不随帧闪烁）
- * - 扁平两色：底色 + 暗部色块（朝阳/背阴坡的暗条，长度随太阳高度变化 —— 太阳越低阴影越长）
- * - 岩石坡：坡度超阈值换成岩石色块（无雪雾，摩擦更高由 sim 决定）
+ * - 一关一套色：轮廓条纹（A/B/C 沿坡向下循环）整关固定，换关随主题整套更替；地表下白渐变受光唇边
+ * - 背阴坡柔影：暗色多层叠描边近似渐变，深度随太阳高度变化（太阳越低影越长）
+ * - 全程无描边；岩石坡保留扁平色块（绘本平色点缀）
  * - 金币（不规则多边形金片）、巢穴（树枝 scribble + 金色信标）、焦痕（爆燃砸地）
  * - 只绘制视口内的控制点段（按需绘制）
  */
@@ -28,6 +28,11 @@ export class TerrainRenderer {
   private scorches: Scorch[] = [];
   /** 完美着陆判定提示圈（由渲染器预测计算后绘制） */
   hintRing: { x: number; y: number; alpha: number } | null = null;
+  /** 底纵深渐变缓存（颜色+量化坐标键，坐标 8px 量化视觉不可辨） */
+  private depthGrad: CanvasGradient | null = null;
+  private depthGradKey = '';
+  /** 植被色阶缓存：调色板对象在 themeCache 内按档稳定，WeakMap 命中率极高 */
+  private scenCache = new WeakMap<SkyPalette, Record<string, string>>();
 
   addScorch(x: number, y: number): void {
     this.scorches.push({ x, y, age: 0 });
@@ -55,7 +60,7 @@ export class TerrainRenderer {
     fever: boolean
   ): void {
     const [x0, x1] = cam.viewBounds();
-    const step = 13 / cam.zoom; // 屏幕上约 13px 一段
+    const step = 16 / cam.zoom; // 屏幕上约 16px 一段（山体平滑，16px 足够）
     const bottom = cam.y + viewH; // 世界坐标底部
 
     // ---- 采样 ----
@@ -68,48 +73,100 @@ export class TerrainRenderer {
       ys.push(terrain.heightAt(x));
     }
 
-    // 阴影条深度（太阳越低越长）—— 供下方赛璐璐色块使用
+    // 柔影深度（太阳越低越长）—— 决定背阴坡暗色层的宽度
     const shadeDepth = 14 + dayProgress * 30;
 
-    // ---- 主体填充（雪底色） ----
-    ctx.fillStyle = withA(pal.snow, 1);
-    ctx.beginPath();
+    // ---- 手绘抖动（裁剪路径与地表描边共用，确定性噪声 ≤1.5px） ----
+    const js: number[] = [];
+    for (let i = 0; i < n; i++) js.push(valueNoise(xs[i] * 0.05, 600) * 1.2);
+    const surfPath = new Path2D();
     for (let i = 0; i < n; i++) {
-      const j = valueNoise(xs[i] * 0.05, 600) * 1.2; // 手绘抖动 ≤1.5px
-      if (i === 0) ctx.moveTo(xs[i] + j, ys[i] + j);
-      else ctx.lineTo(xs[i] + j, ys[i] + j);
+      if (i === 0) surfPath.moveTo(xs[i] + js[i], ys[i] + js[i]);
+      else surfPath.lineTo(xs[i] + js[i], ys[i] + js[i]);
     }
-    ctx.lineTo(x1, bottom + 80);
-    ctx.lineTo(x0, bottom + 80);
-    ctx.closePath();
-    ctx.fill();
+    surfPath.lineTo(x1, bottom + 80);
+    surfPath.lineTo(x0, bottom + 80);
+    surfPath.closePath();
 
-    // ---- 赛璐璐暗部色块（背阴坡）：扁平色 + 硬边界，叠在雪底之上 ----
-    ctx.fillStyle = withA(pal.snowShade, 1);
-    ctx.beginPath();
-    let inShade = false;
-    for (let i = 0; i < n; i++) {
-      const slope = (ys[Math.min(i + 1, n - 1)] - ys[Math.max(i - 1, 0)]) / (xs[Math.min(i + 1, n - 1)] - xs[Math.max(i - 1, 0)] || 1);
-      const shady = slope < -0.16;
-      if (shady && !inShade) {
-        ctx.moveTo(xs[i], ys[i]);
-        inShade = true;
-      } else if (shady) {
-        ctx.lineTo(xs[i], ys[i]);
-      } else if (inShade) {
-        ctx.lineTo(xs[i - 1], ys[i - 1] + shadeDepth);
-        for (let j = i - 1; j >= 0; j--) {
-          ctx.lineTo(xs[j], ys[j] + shadeDepth);
-          const s2 = (ys[Math.min(j + 1, n - 1)] - ys[Math.max(j - 1, 0)]) / (xs[Math.min(j + 1, n - 1)] - xs[Math.max(j - 1, 0)] || 1);
-          if (j === 0 || s2 > -0.1) break;
-        }
-        ctx.closePath();
-        inShade = false;
+    // ---- 绘本轮廓条纹 + 底纵深 + 受光/背阴柔影（全部裁剪进地形内，无描边） ----
+    ctx.save();
+    ctx.clip(surfPath);
+
+    let yMin = ys[0];
+    for (let i = 1; i < n; i++) if (ys[i] < yMin) yMin = ys[i];
+
+    // 一关一套色：轮廓条纹色带沿地表平行展开（等高线感），整关内颜色固定
+    // （山坡向下 A→B→C 逐层循环、沿 x 不变）—— 换关时整套配色随主题更替
+    const cols = [`rgb(${pal.hillA})`, `rgb(${pal.hillB})`, `rgb(${pal.hillC})`];
+    const BAND = 62; // 条纹厚度（世界像素）
+    const bandCount = Math.min(16, Math.ceil((bottom + 80 - yMin) / BAND));
+    for (let k = 0; k < bandCount; k++) {
+      ctx.fillStyle = cols[k % 3];
+      const top = k * BAND;
+      const bot = (k + 1) * BAND + 1; // +1 与下一带搭接防缝
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        if (i === 0) ctx.moveTo(xs[i], ys[i] + top);
+        else ctx.lineTo(xs[i], ys[i] + top);
       }
+      for (let i = n - 1; i >= 0; i--) ctx.lineTo(xs[i], ys[i] + bot);
+      ctx.closePath();
+      ctx.fill();
     }
-    ctx.fill();
 
-    // ---- 赛璐璐岩石色块（陡坡）：扁平双色 ----
+    // 底纵深：向屏幕底渐入 snowDeep（丘陵向下的空气感；渐变按量化坐标缓存）
+    const yMinQ = Math.round(yMin / 8) * 8;
+    const bottomQ = Math.round(bottom / 8) * 8;
+    const depthKey = `${pal.snowDeep}|${yMinQ}|${bottomQ}`;
+    if (depthKey !== this.depthGradKey || !this.depthGrad) {
+      const g = ctx.createLinearGradient(0, yMinQ, 0, bottomQ + 80);
+      g.addColorStop(0, withA(pal.snowDeep, 0));
+      g.addColorStop(1, withA(pal.snowDeep, 0.38));
+      this.depthGrad = g;
+      this.depthGradKey = depthKey;
+    }
+    ctx.fillStyle = this.depthGrad;
+    ctx.fillRect(x0 - 4, yMin - 4, x1 - x0 + 8, bottom + 90 - yMin);
+
+    // 受光/背阴柔影：按坡度把地表切成向阳/背阴段，分别叠多层半透明描边（近似渐变）
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    const lipLayers = [
+      { w: 14, off: 7, a: 0.10 },
+      { w: 6, off: 3, a: 0.12 },
+    ];
+    const shadeLayers = [
+      { w: shadeDepth, off: shadeDepth * 0.45, a: 0.16 },
+      { w: shadeDepth * 0.4, off: shadeDepth * 0.15, a: 0.13 },
+    ];
+    const slopeAt = (i: number) =>
+      (ys[Math.min(i + 1, n - 1)] - ys[Math.max(i - 1, 0)]) /
+      (xs[Math.min(i + 1, n - 1)] - xs[Math.max(i - 1, 0)] || 1);
+    let segStart = 0;
+    for (let i = 1; i <= n; i++) {
+      const curShady = i < n ? slopeAt(i) < -0.16 : null;
+      const prevShady = slopeAt(i - 1) < -0.16;
+      if (i < n && curShady === prevShady) continue;
+      // 段落 [segStart, i-1] 结束：向阳段画受光唇边，背阴段画暗影
+      const shady = prevShady;
+      for (const L of shady ? shadeLayers : lipLayers) {
+        ctx.strokeStyle = shady ? withA(pal.snowShade, L.a) : `rgba(255,250,235,${L.a})`;
+        ctx.lineWidth = L.w;
+        ctx.beginPath();
+        for (let k = segStart; k <= i - 1 && k < n; k++) {
+          const px = xs[k] + js[k];
+          const py = ys[k] + js[k] + L.off;
+          if (k === segStart) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+      segStart = i;
+    }
+
+    ctx.restore();
+
+    // ---- 岩石色块（陡坡，绘本扁平平色点缀） ----
     ctx.fillStyle = withA(pal.rock, 1);
     ctx.beginPath();
     let inRock = false;
@@ -130,45 +187,24 @@ export class TerrainRenderer {
     }
     ctx.fill();
 
-    // ---- 赛璐璐受光脊线（亮边）：粗亮描边在暗描边之下，露出上缘 ----
-    ctx.strokeStyle = 'rgba(255,252,240,0.85)';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    for (let i = 0; i < n; i++) {
-      const j = valueNoise(xs[i] * 0.05, 600) * 1.2;
-      if (i === 0) ctx.moveTo(xs[i] + j, ys[i] + j + 2.5);
-      else ctx.lineTo(xs[i] + j, ys[i] + j + 2.5);
-    }
-    ctx.stroke();
-
-    // ---- 顶部 2px 手绘描边 ----
-    ctx.strokeStyle = withA(pal.snowOutline, 0.9);
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    for (let i = 0; i < n; i++) {
-      const j = valueNoise(xs[i] * 0.05, 600) * 1.2;
-      if (i === 0) ctx.moveTo(xs[i] + j, ys[i] + j);
-      else ctx.lineTo(xs[i] + j, ys[i] + j);
-    }
-    ctx.stroke();
-
     // ---- 赛璐璐植被（松/圆树/灌木/草丛，确定性散布 + 风摆） ----
     this.drawScenery(ctx, terrain, cam, pal, time);
 
-    // ---- 焦痕 ----
+    // ---- 焦痕（径向渐变软化边缘） ----
     for (const s of this.scorches) {
       const fade = clamp(1 - s.age / 30, 0.15, 1);
-      ctx.fillStyle = withA('58,44,38', 0.5 * fade);
+      const g = ctx.createRadialGradient(s.x, s.y - 3, 4, s.x, s.y - 3, 60);
+      g.addColorStop(0, withA('44,32,28', 0.55 * fade));
+      g.addColorStop(1, withA('44,32,28', 0));
+      ctx.fillStyle = g;
+      ctx.save();
+      ctx.translate(s.x, s.y - 3);
+      ctx.rotate(terrain.tangentAngle(s.x));
+      ctx.scale(1, 0.24);
       ctx.beginPath();
-      ctx.ellipse(s.x, s.y - 3, 60, 14, terrain.tangentAngle(s.x), 0, Math.PI * 2);
+      ctx.arc(0, 0, 60, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = withA('30,22,20', 0.4 * fade);
-      for (let i = 0; i < 5; i++) {
-        const ox = valueNoise(i + s.x, 700) * 90;
-        ctx.beginPath();
-        ctx.ellipse(s.x + ox, s.y - 2, 7, 3, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      ctx.restore();
     }
 
     // ---- 金币 ----
@@ -201,38 +237,39 @@ export class TerrainRenderer {
     void fever;
   }
 
-  /** 赛璐璐植被：可玩地形上的松树/圆树/灌木/草丛。
-   *  确定性散布（hash 网格）、陡坡不长树、黄昏随天色调暖、微风摆动。
+  /** 绘本植被：可玩地形上的松树/圆树/灌木/草丛。
+   *  确定性散布（hash 网格）、陡坡不长树、黄昏随天色调暖、微风摆动、无描边无硬边暗面。
    *  颜色每次绘制只构建一次（每树每帧拼字符串会造成 GC 卡顿）。 */
   drawScenery(ctx: CanvasRenderingContext2D, terrain: Terrain, cam: Camera, pal: SkyPalette, time: number): void {
     const [x0, x1] = cam.viewBounds();
-    // 黄昏混色：植被随天色注入地平线暖调（赛璐璐整体调色板一致性）
-    const horizon = pal.horizon.split(',').map(Number);
-    const duskT = pal.silhouette * 0.4;
-    const build = (rgb: string, k: number): string => {
-      const p = rgb.split(',').map(Number);
-      const c = p.map((v, i) => Math.round(v + (horizon[i] - v) * duskT));
-      const d = [Math.round(c[0] * 0.68), Math.round(c[1] * 0.68), Math.round(c[2] * 0.68)];
-      return `rgb(${Math.round(c[0] + (d[0] - c[0]) * k)},${Math.round(c[1] + (d[1] - c[1]) * k)},${Math.round(c[2] + (d[2] - c[2]) * k)})`;
-    };
-    const PINE = '62,108,84';
-    const ROUND = '86,138,94';
-    const TRUNK = '110,84,60';
-    // 每帧一次性构建全部 8 个色阶（松 3 层 + 干 / 圆树 3 / 灌木 2 / 草）
-    const C = {
-      trunk: build(TRUNK, 0.4),
-      pine0: build(PINE, 0),
-      pine1: build(PINE, 0.08),
-      pine2: build(PINE, 0.16),
-      pineD0: build(PINE, 0.75),
-      pineD1: build(PINE, 0.8),
-      pineD2: build(PINE, 0.85),
-      round0: build(ROUND, 0),
-      roundD: build(ROUND, 0.8),
-      roundH: build(ROUND, -0.25),
-      bush0: build(ROUND, 0.1),
-      grass: build(PINE, -0.1),
-    };
+    // 植被色阶按调色板对象缓存（每帧只取引用；重建仅发生在昼夜档/主题变化时）
+    let C = this.scenCache.get(pal);
+    if (!C) {
+      // 黄昏混色：植被随天色注入地平线暖调（整体调色板一致性）
+      const horizon = pal.horizon.split(',').map(Number);
+      const duskT = pal.silhouette * 0.4;
+      const build = (rgb: string, k: number): string => {
+        const p = rgb.split(',').map(Number);
+        const c = p.map((v, i) => Math.round(v + (horizon[i] - v) * duskT));
+        const d = [Math.round(c[0] * 0.68), Math.round(c[1] * 0.68), Math.round(c[2] * 0.68)];
+        return `rgb(${Math.round(c[0] + (d[0] - c[0]) * k)},${Math.round(c[1] + (d[1] - c[1]) * k)},${Math.round(c[2] + (d[2] - c[2]) * k)})`;
+      };
+      const PINE = '62,108,84';
+      const ROUND = '86,138,94';
+      const TRUNK = '110,84,60';
+      C = {
+        trunk: build(TRUNK, 0.4),
+        pine0: build(PINE, 0),
+        pine1: build(PINE, 0.08),
+        pine2: build(PINE, 0.16),
+        pineShade: build(PINE, 0.75),
+        round0: build(ROUND, 0),
+        roundShade: build(ROUND, 0.7),
+        bush0: build(ROUND, 0.1),
+        grass: build(PINE, -0.1),
+      };
+      this.scenCache.set(pal, C);
+    }
 
     for (let gx = Math.floor(x0 / 210) * 210; gx <= x1 + 210; gx += 210) {
       const h1 = rand01(gx, 777001);
@@ -248,7 +285,7 @@ export class TerrainRenderer {
       ctx.translate(x, gy);
       ctx.rotate(terrain.tangentAngle(x) * 0.45 + sway);
       if (type < 0.42) {
-        // 松树：三层三角 + 右侧硬边暗面 + 树干
+        // 松树：三层近似色阶三角（远暗近亮）+ 树干，无暗面切分
         ctx.fillStyle = C.trunk;
         ctx.fillRect(-2 * s, -10 * s, 4 * s, 11 * s);
         for (let i = 0; i < 3; i++) {
@@ -262,16 +299,9 @@ export class TerrainRenderer {
           ctx.lineTo(halfW, botY);
           ctx.closePath();
           ctx.fill();
-          ctx.fillStyle = i === 0 ? C.pineD0 : i === 1 ? C.pineD1 : C.pineD2;
-          ctx.beginPath();
-          ctx.moveTo(0, topY);
-          ctx.lineTo(halfW, botY);
-          ctx.lineTo(0, botY);
-          ctx.closePath();
-          ctx.fill();
         }
       } else if (type < 0.78) {
-        // 圆树：干 + 圆冠（硬边暗面 + 高光点）
+        // 圆树：干 + 圆冠（底部柔渐变暗影）
         ctx.fillStyle = C.trunk;
         ctx.fillRect(-2.5 * s, -16 * s, 5 * s, 17 * s);
         const r = 14 * s;
@@ -280,28 +310,28 @@ export class TerrainRenderer {
         ctx.arc(0, -26 * s, r, 0, Math.PI * 2);
         ctx.fill();
         ctx.save();
+        ctx.beginPath();
+        ctx.arc(0, -26 * s, r, 0, Math.PI * 2);
         ctx.clip();
-        ctx.fillStyle = C.roundD;
-        ctx.beginPath();
-        ctx.arc(4 * s, -18 * s, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = C.roundH;
-        ctx.beginPath();
-        ctx.arc(-5 * s, -31 * s, 4.5 * s, 0, Math.PI * 2);
-        ctx.fill();
+        const crownGrad = ctx.createLinearGradient(0, -34 * s, 0, -12 * s);
+        crownGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        crownGrad.addColorStop(1, C.roundShade);
+        ctx.fillStyle = crownGrad;
+        ctx.fillRect(-r, -26 * s - r, r * 2, r * 2);
         ctx.restore();
       } else {
-        // 灌木：双圆 + 暗面
+        // 灌木：双圆 + 下侧深色椭圆（无裁剪硬带）
         ctx.fillStyle = C.bush0;
         ctx.beginPath();
         ctx.arc(-5 * s, -6 * s, 8 * s, 0, Math.PI * 2);
         ctx.arc(6 * s, -5 * s, 6.5 * s, 0, Math.PI * 2);
         ctx.fill();
-        ctx.save();
-        ctx.clip();
-        ctx.fillStyle = C.roundD;
-        ctx.fillRect(-16 * s, -4 * s, 32 * s, 14 * s);
-        ctx.restore();
+        ctx.fillStyle = C.pineShade;
+        ctx.globalAlpha = 0.45;
+        ctx.beginPath();
+        ctx.ellipse(0, -2 * s, 10 * s, 5 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       }
       ctx.restore();
     }
@@ -409,31 +439,23 @@ export class TerrainRenderer {
       const ang = terrain.tangentAngle(x);
       ctx.save();
       ctx.translate(x, y + 2);
-      // 木柱
+      // 木柱（扁平色，无描边）
       ctx.fillStyle = km ? '#8a6a3a' : '#7c6650';
-      ctx.strokeStyle = 'rgba(46,34,28,0.9)';
-      ctx.lineWidth = 3;
       ctx.fillRect(-4 * k, -70 * k, 8 * k, 70 * k);
-      ctx.strokeRect(-4 * k, -70 * k, 8 * k, 70 * k);
-      // 牌面（随坡微倾，赛璐璐双色 + 粗描边）
+      // 牌面（随坡微倾，绘本扁平双色 + 柔和纵向渐变）
       ctx.translate(0, -70 * k);
       ctx.rotate(clamp(ang, -0.15, 0.15) * 0.5);
       const bw = 118 * k;
       const bh = 54 * k;
-      ctx.fillStyle = km ? '#e8b45a' : '#9c8266';
+      const boardLight = km ? '#eec26a' : '#a88c6e';
+      const boardDark = km ? '#cf9c48' : '#8a7058';
+      const boardGrad = ctx.createLinearGradient(0, -bh, 0, 0);
+      boardGrad.addColorStop(0, boardLight);
+      boardGrad.addColorStop(1, boardDark);
+      ctx.fillStyle = boardGrad;
       ctx.beginPath();
       this.roundRectPath(ctx, -bw / 2, -bh, bw, bh, 8 * k);
       ctx.fill();
-      ctx.save();
-      ctx.clip();
-      ctx.fillStyle = km ? '#c99647' : '#846952'; // 底部硬边暗带
-      ctx.fillRect(-bw / 2, -14 * k, bw, 14 * k);
-      ctx.restore();
-      ctx.lineWidth = 3 * k;
-      ctx.strokeStyle = 'rgba(46,34,28,0.95)';
-      ctx.beginPath();
-      this.roundRectPath(ctx, -bw / 2, -bh, bw, bh, 8 * k);
-      ctx.stroke();
       // 距离数字（大、加粗）
       ctx.fillStyle = '#3c2a1e';
       ctx.font = `900 ${27 * k}px system-ui`;
@@ -465,42 +487,55 @@ export class TerrainRenderer {
     ctx.closePath();
   }
 
-  /** 金币：不规则 12 边形金片 + 暗缘 + 高光刻痕（拒绝裸圆） */
+  /** 金币：预渲染 4 种手绘 12 边形变体精灵（2× 分辨率），翻转用宽度缩放 ——
+   *  免去每币每帧的两组多边形路径 + 噪声求值 */
+  private coinSprites: HTMLCanvasElement[] | null = null;
+
+  private ensureCoinSprites(): void {
+    if (this.coinSprites) return;
+    const RES = 2;
+    const R = 13;
+    this.coinSprites = [];
+    for (let v = 0; v < 4; v++) {
+      const cv = document.createElement('canvas');
+      cv.width = 34 * RES;
+      cv.height = 34 * RES;
+      const c2 = cv.getContext('2d')!;
+      c2.scale(RES, RES);
+      c2.translate(17, 17);
+      const n = 12;
+      const tracePoly = (r: number, noiseSeed: number) => {
+        c2.beginPath();
+        for (let i = 0; i <= n; i++) {
+          const a = (i / n) * Math.PI * 2;
+          const rr = r * (1 + valueNoise((i % n) + v * 31 + noiseSeed, 900) * 0.14);
+          const px = Math.cos(a) * rr;
+          const py = Math.sin(a) * rr;
+          if (i === 0) c2.moveTo(px, py);
+          else c2.lineTo(px, py);
+        }
+        c2.closePath();
+      };
+      c2.fillStyle = '#e0a93e';
+      tracePoly(R, 0);
+      c2.fill();
+      c2.fillStyle = '#ffd54f';
+      tracePoly(R * 0.72, 3);
+      c2.fill();
+      // 高光小点（绘本式柔点）
+      c2.fillStyle = 'rgba(255,255,244,0.75)';
+      c2.beginPath();
+      c2.arc(-4, -5, 2.4, 0, Math.PI * 2);
+      c2.fill();
+      this.coinSprites.push(cv);
+    }
+  }
+
   private drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, seed: number): void {
-    const n = 12;
-    const r = 13;
+    this.ensureCoinSprites();
     const spin = Math.sin(time * 2.2 + seed * 0.13);
     const squash = 0.35 + Math.abs(spin) * 0.65; // 翻转感
-    ctx.fillStyle = '#e0a93e';
-    ctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      const rr = r * (1 + valueNoise(i % n + seed, 900) * 0.14);
-      const px = x + Math.cos(a) * rr * squash;
-      const py = y + Math.sin(a) * rr;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#ffd54f';
-    ctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      const rr = r * 0.72 * (1 + valueNoise(i % n + seed + 3, 901) * 0.14);
-      const px = x + Math.cos(a) * rr * squash;
-      const py = y + Math.sin(a) * rr;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
-    // 高光刻痕
-    ctx.strokeStyle = 'rgba(255,255,240,0.9)';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(x - 5 * squash, y - 5);
-    ctx.lineTo(x - 1 * squash, y - 6);
-    ctx.stroke();
+    const spr = this.coinSprites![Math.floor(seed * 0.137) & 3];
+    ctx.drawImage(spr, x - 17 * squash, y - 17, 34 * squash, 34);
   }
 }

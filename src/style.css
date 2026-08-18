@@ -3,7 +3,8 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: #1a1118;
+  /* 绘本暖奶油底（加载瞬间到画面亮起前的过渡色） */
+  background: #f2e3cf;
   height: 100%;
 }
 

@@ -49,6 +49,10 @@ export class Renderer {
   private predictTick = 0;
   /** 关卡主题调色板缓存：dayP|level|渐变档 */
   private themeCache = new Map<string, SkyPalette>();
+  /** 新一天黎明过渡计时（<0 = 不在过渡）。归巢演出把 dayProgress 推到 1（日落），
+   *  新一天计时器重置会瞬间跳回 0（清晨）—— 用约 4s 的回落过渡抹掉这次跳变 */
+  private dawnBlendT = -1;
+  private lastLvl = -1;
 
   constructor(public readonly ctx: CanvasRenderingContext2D) {}
 
@@ -152,16 +156,28 @@ export class Renderer {
     this.parallax.layers = quality.parallaxLayers;
 
     // 调色板（霞光演出时覆盖 dayProgress）+ 关卡主题分级（关卡前 30% 平滑渐变进入新画风）
-    const dayP = dayOverride ?? sim.dayProgress;
     const lvl = themeLevel ?? sim.level;
+    // 进入新关卡（level 增加）：启动黎明回落过渡，抹掉日落→清晨的 dayProgress 跳变
+    if (lvl > this.lastLvl && this.lastLvl !== -1) this.dawnBlendT = 0;
+    if (lvl !== this.lastLvl) this.lastLvl = lvl;
+    if (this.dawnBlendT >= 0 && dayOverride == null) {
+      this.dawnBlendT += realDt;
+      if (this.dawnBlendT > 4) this.dawnBlendT = -1;
+    }
+    let dayP = dayOverride ?? sim.dayProgress;
+    if (this.dawnBlendT >= 0 && dayOverride == null) {
+      const t = Math.min(1, this.dawnBlendT / 4);
+      dayP = lerp(1, sim.dayProgress, t * t); // 日落红 → 清晨的平滑回落
+    }
     const themeKey = `${Math.round(dayP * 100)}|${lvl}|${Math.round(clamp((sim.x - sim.terrain.nestX(lvl - 1)) / sim.terrain.levelDist(lvl), 0, 1) * 10)}`;
     let pal = this.themeCache.get(themeKey);
     if (!pal) {
-      const prevTheme = themeForLevel(lvl - 1);
       const curTheme = themeForLevel(lvl);
-      const k2 = clamp((sim.x - sim.terrain.nestX(lvl - 1)) / sim.terrain.levelDist(lvl) / 0.3, 0, 1);
+      // ?theme=N 预览：直接全量应用当前主题；自然游玩：关卡前 30% 从上一主题平滑过渡
+      // （第 1 关没有「上一主题」，从基础昼夜色渐入 —— 不再与循环尾端的第 8 关混色）
+      const k2 = themeLevel != null ? 1 : clamp((sim.x - sim.terrain.nestX(lvl - 1)) / sim.terrain.levelDist(lvl) / 0.3, 0, 1);
       pal = { ...skyAt(dayP) };
-      applyTheme(pal, prevTheme, 1 - k2);
+      if (lvl > 1 && themeLevel == null) applyTheme(pal, themeForLevel(lvl - 1), 1 - k2);
       applyTheme(pal, curTheme, k2);
       this.themeCache.set(themeKey, pal);
     }

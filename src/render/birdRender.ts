@@ -5,7 +5,7 @@
  * - 尾部「火焰羽冠」三片：颜色 = flameRamp(heat)（与粒子/HUD 同源），
  *   长度 = 基础 × (1 + 热度/100)，随速度波动 —— 活仪表盘的主体读数
  * - 三态翅膀：boost 收拢 / cool 展翅扇动 / cruise 半张
- * - 手绘感：轮廓带 6fps「沸腾」抖动（幅度 ≤1.2px），无裸圆
+ * - 手绘绘本画风：无描边，身体柔和渐变（左上受光→右下沉影），保留 6fps「沸腾」抖动
  * - 状态表情：红热→皱眉；翻滚→螺旋眼；黄昏→剪影对比度提升
  */
 
@@ -66,28 +66,15 @@ export class BirdRenderer {
         ? `rgb(${Math.round(lerp(76, 46, sil))},${Math.round(lerp(67, 38, sil))},${Math.round(lerp(64, 52, sil))})`
         : 'rgb(76,67,64)';
     const bellyCol = charred ? 'rgb(58,50,54)' : sil > 0 ? `rgb(${Math.round(lerp(242, 150, sil))},${Math.round(lerp(227, 118, sil))},${Math.round(lerp(201, 110, sil))})` : 'rgb(242,227,201)';
-    // 轮廓：手绘沸腾抖动（赛璐璐粗描边）
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = charred ? 'rgb(18,14,18)' : sil > 0.4 ? 'rgb(26,22,30)' : 'rgb(48,40,38)';
-    ctx.fillStyle = bodyCol;
+    // 绘本柔渐变身体（左上受光 → 右下沉影，替代赛璐璐硬边双色调）
+    const bodyGrad = ctx.createLinearGradient(-20, -18, 14, 20);
+    bodyGrad.addColorStop(0, shadeRGB(bodyCol, 1.3));
+    bodyGrad.addColorStop(0.52, bodyCol);
+    bodyGrad.addColorStop(1, shadeRGB(bodyCol, 0.72));
+    ctx.fillStyle = bodyGrad;
     ctx.beginPath();
     this.wobblyEllipse(ctx, 0, 0, 24, 19, this.boilTick);
     ctx.fill();
-    // 赛璐璐双色调：硬边阴影（下侧椭圆裁进身体）+ 高光月牙（上受光侧）
-    ctx.save();
-    ctx.beginPath();
-    this.wobblyEllipse(ctx, 0, 0, 24, 19, this.boilTick);
-    ctx.clip();
-    ctx.fillStyle = shadeRGB(bodyCol, 0.7);
-    ctx.beginPath();
-    ctx.ellipse(5, 23, 31, 17, 0.06, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = shadeRGB(bodyCol, 1.35);
-    ctx.beginPath();
-    ctx.ellipse(-9, -9, 10, 5, -0.45, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    ctx.stroke();
 
     // 肚皮
     ctx.fillStyle = bellyCol;
@@ -111,17 +98,14 @@ export class BirdRenderer {
     // 翅膀（前侧，略大一点盖住身体）
     this.drawWing(ctx, wing, flapPhase, st, time, true);
 
-    // 喙
+    // 喙（扁平色，无描边）
     ctx.fillStyle = charred ? '#8a6a4a' : '#ffa94d';
-    ctx.strokeStyle = charred ? 'rgb(30,24,26)' : 'rgb(48,40,38)';
-    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(21, -3);
     ctx.lineTo(35, 1);
     ctx.lineTo(21, 5);
     ctx.closePath();
     ctx.fill();
-    ctx.stroke();
 
     // 眼睛（含眨眼/红热皱眉/宕机螺旋眼）
     this.drawEye(ctx, st, phase);
@@ -206,20 +190,12 @@ export class BirdRenderer {
     const wl = 10 + spread * 16; // 翅膀真的很小（最大 26px vs 身体 48px）
     const wh = 5 + spread * 5;
     ctx.fillStyle = st.daySilhouette > 0.5 ? 'rgb(40,33,38)' : 'rgb(58,50,48)';
-    ctx.strokeStyle = 'rgb(40,34,32)';
-    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.quadraticCurveTo(-wl * 0.4, -wh * 1.6, -wl, -wh * 0.2);
     ctx.quadraticCurveTo(-wl * 0.5, wh * 0.9, 0, wh * 0.7);
     ctx.closePath();
     ctx.fill();
-    ctx.stroke();
-    // 翅羽刻线
-    ctx.beginPath();
-    ctx.moveTo(-wl * 0.25, -wh * 0.4);
-    ctx.quadraticCurveTo(-wl * 0.55, -wh * 0.2, -wl * 0.8, 0);
-    ctx.stroke();
     ctx.restore();
   }
 
@@ -231,7 +207,7 @@ export class BirdRenderer {
     const blink = this.blinkT % 3.4 < 0.12 ? 0.15 : 1;
     ctx.fillStyle = '#fff8ec';
     ctx.strokeStyle = 'rgb(40,34,32)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5; // 细描边：仅保证小尺寸下的可读性
     ctx.beginPath();
     this.wobblyEllipse(ctx, ex, ey, 6, 6 * blink, this.boilTick + 7);
     ctx.fill();
