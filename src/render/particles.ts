@@ -142,7 +142,7 @@ export class ParticlePool {
     }
   }
 
-  /** 散热蒸汽（滑翔态持续 + 着陆爆发） */
+  /** 散热蒸汽（滑翔态持续 + 着陆爆发）—— 可读性增强：尺寸稍大、持续时间长 */
   emitSteam(x: number, y: number, n: number, power = 1): void {
     n = Math.round(n * this.densityScale);
     for (let i = 0; i < n; i++) {
@@ -152,10 +152,10 @@ export class ParticlePool {
       s.y = y + (Math.random() - 0.5) * 10;
       s.vx = (Math.random() - 0.5) * 60 * power;
       s.vy = -30 - Math.random() * 70 * power;
-      s.maxLife = 0.5 + Math.random() * 0.5;
+      s.maxLife = 0.6 + Math.random() * 0.6; // 增加 +0.1s 寿命
       s.life = s.maxLife;
-      s.size0 = (6 + Math.random() * 7) * power;
-      s.size1 = s.size0 * 2.4;
+      s.size0 = (7 + Math.random() * 9) * power; // 增大初始尺寸
+      s.size1 = s.size0 * 2.6; // 增大膨胀系数
       s.grav = -40;
       s.drag = 1.6;
       s.seed = Math.random();

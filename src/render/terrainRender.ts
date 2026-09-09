@@ -258,6 +258,9 @@ export class TerrainRenderer {
       const PINE = '62,108,84';
       const ROUND = '86,138,94';
       const TRUNK = '110,84,60';
+      const CORAL = '190,110,90';
+      const LAVENDER = '140,100,150';
+      const ICE = '180,200,220';
       C = {
         trunk: build(TRUNK, 0.4),
         pine0: build(PINE, 0),
@@ -270,6 +273,16 @@ export class TerrainRenderer {
         grass: build(PINE, -0.1),
         rockDark: build('90,76,68', 0.6),
         rockLight: build('120,98,84', 0.2),
+        grain: build('200,160,80', 0.3),
+        grainLight: build('220,180,100', 0.1),
+        coral: build(CORAL, 0.4),
+        coralLight: build(CORAL, 0.1),
+        lavender: build(LAVENDER, 0.3),
+        lavenderLight: build(LAVENDER, 0.1),
+        ice: build(ICE, 0.2),
+        iceLight: build(ICE, 0),
+        starDust: build('180,180,220', 0.1),
+        floatRock: build('100,90,120', 0.5),
       };
       this.scenCache.set(pal, C);
     }
@@ -291,79 +304,226 @@ export class TerrainRenderer {
       ctx.translate(x, gy);
       ctx.rotate(terrain.tangentAngle(x) * 0.45 + sway);
 
-      // 主题 4 火山：增加尖锐岩石剪影
-      if (theme === 4 && type < 0.28) {
-        const h = (32 + rand01(gx, 777006) * 24) * s;
-        ctx.fillStyle = C.rockDark;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(-7 * s, 0);
-        ctx.lineTo(-4 * s, -h * 0.6);
-        ctx.lineTo(-2 * s, -h * 0.85);
-        ctx.lineTo(0, -h);
-        ctx.lineTo(2 * s, -h * 0.78);
-        ctx.lineTo(5 * s, -h * 0.52);
-        ctx.lineTo(8 * s, 0);
-        ctx.closePath();
-        ctx.fill();
-        // 受光面
-        ctx.fillStyle = C.rockLight;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(0, -h);
-        ctx.lineTo(2 * s, -h * 0.78);
-        ctx.lineTo(5 * s, -h * 0.52);
-        ctx.lineTo(8 * s, 0);
-        ctx.closePath();
-        ctx.fill();
-      } else if (type < 0.42) {
-        // 松树：三层近似色阶三角（远暗近亮）+ 树干，无暗面切分
-        ctx.fillStyle = C.trunk;
-        ctx.fillRect(-2 * s, -10 * s, 4 * s, 11 * s);
-        for (let i = 0; i < 3; i++) {
-          const topY = (-46 + i * 13) * s;
-          const halfW = (17 - i * 4) * s;
-          const botY = topY + 18 * s;
-          ctx.fillStyle = i === 0 ? C.pine0 : i === 1 ? C.pine1 : C.pine2;
+      // 主题特色道具
+      if (theme === 0) {
+        // 晨曦草原：圆树 + 草丛（现有通用道具适合）
+        if (type < 0.5) {
+          ctx.fillStyle = C.trunk;
+          ctx.fillRect(-2.5 * s, -16 * s, 5 * s, 17 * s);
+          const r = 14 * s;
+          ctx.fillStyle = C.round0;
           ctx.beginPath();
-          ctx.moveTo(0, topY);
-          ctx.lineTo(-halfW, botY);
-          ctx.lineTo(halfW, botY);
-          ctx.closePath();
+          ctx.arc(0, -26 * s, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(0, -26 * s, r, 0, Math.PI * 2);
+          ctx.clip();
+          const crownGrad = ctx.createLinearGradient(0, -34 * s, 0, -12 * s);
+          crownGrad.addColorStop(0, 'rgba(0,0,0,0)');
+          crownGrad.addColorStop(1, C.roundShade);
+          ctx.fillStyle = crownGrad;
+          ctx.fillRect(-r, -26 * s - r, r * 2, r * 2);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = C.bush0;
+          ctx.beginPath();
+          ctx.arc(-5 * s, -6 * s, 8 * s, 0, Math.PI * 2);
+          ctx.arc(6 * s, -5 * s, 6.5 * s, 0, Math.PI * 2);
           ctx.fill();
         }
-      } else if (type < 0.78) {
-        // 圆树：干 + 圆冠（底部柔渐变暗影）
-        ctx.fillStyle = C.trunk;
-        ctx.fillRect(-2.5 * s, -16 * s, 5 * s, 17 * s);
-        const r = 14 * s;
-        ctx.fillStyle = C.round0;
-        ctx.beginPath();
-        ctx.arc(0, -26 * s, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(0, -26 * s, r, 0, Math.PI * 2);
-        ctx.clip();
-        const crownGrad = ctx.createLinearGradient(0, -34 * s, 0, -12 * s);
-        crownGrad.addColorStop(0, 'rgba(0,0,0,0)');
-        crownGrad.addColorStop(1, C.roundShade);
-        ctx.fillStyle = crownGrad;
-        ctx.fillRect(-r, -26 * s - r, r * 2, r * 2);
-        ctx.restore();
-      } else {
-        // 灌木：双圆 + 下侧深色椭圆（无裁剪硬带）
-        ctx.fillStyle = C.bush0;
-        ctx.beginPath();
-        ctx.arc(-5 * s, -6 * s, 8 * s, 0, Math.PI * 2);
-        ctx.arc(6 * s, -5 * s, 6.5 * s, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = C.pineShade;
-        ctx.globalAlpha = 0.45;
-        ctx.beginPath();
-        ctx.ellipse(0, -2 * s, 10 * s, 5 * s, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
+      } else if (theme === 1) {
+        // 金穗丘陵：麦捆 / 干草束
+        if (type < 0.35) {
+          const h = (24 + rand01(gx, 777007) * 16) * s;
+          ctx.fillStyle = C.grain;
+          for (let i = 0; i < 5; i++) {
+            const ox = (i - 2) * 2.5 * s;
+            const oy = -h + rand01(i + gx, 777008) * 6 * s;
+            ctx.fillRect(ox - 0.8 * s, 0, 1.6 * s, oy);
+          }
+          ctx.fillStyle = C.grainLight;
+          for (let i = 0; i < 3; i++) {
+            const ox = (i - 1) * 3 * s;
+            const oy = -h * 0.9 + rand01(i + gx + 1, 777008) * 4 * s;
+            ctx.fillRect(ox - 0.6 * s, 0, 1.2 * s, oy);
+          }
+        } else {
+          ctx.fillStyle = C.grain;
+          ctx.beginPath();
+          ctx.ellipse(0, -8 * s, 12 * s, 6 * s, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (theme === 2) {
+        // 珊瑚沙谷：仙人掌 / 珊瑚丛
+        if (type < 0.32) {
+          const h = (38 + rand01(gx, 777009) * 18) * s;
+          ctx.fillStyle = C.coral;
+          ctx.fillRect(-3 * s, 0, 6 * s, -h);
+          ctx.fillStyle = C.coralLight;
+          ctx.fillRect(-1.5 * s, 0, 3 * s, -h);
+          if (rand01(gx, 777010) > 0.5) {
+            ctx.fillStyle = C.coral;
+            ctx.fillRect(-10 * s, -h * 0.5, 7 * s, 5 * s);
+            ctx.fillRect(3 * s, -h * 0.65, 7 * s, 5 * s);
+          }
+        } else {
+          ctx.fillStyle = C.coral;
+          ctx.beginPath();
+          for (let i = 0; i < 3; i++) {
+            const r = (6 + i * 2) * s;
+            ctx.moveTo((i - 1) * 6 * s + r, -(i * 4) * s);
+            ctx.arc((i - 1) * 6 * s, -(i * 4) * s, r, 0, Math.PI * 2);
+          }
+          ctx.fill();
+        }
+      } else if (theme === 3) {
+        // 翠风峡湾：松树（优先）
+        if (type < 0.5) {
+          ctx.fillStyle = C.trunk;
+          ctx.fillRect(-2 * s, -10 * s, 4 * s, 11 * s);
+          for (let i = 0; i < 3; i++) {
+            const topY = (-46 + i * 13) * s;
+            const halfW = (17 - i * 4) * s;
+            const botY = topY + 18 * s;
+            ctx.fillStyle = i === 0 ? C.pine0 : i === 1 ? C.pine1 : C.pine2;
+            ctx.beginPath();
+            ctx.moveTo(0, topY);
+            ctx.lineTo(-halfW, botY);
+            ctx.lineTo(halfW, botY);
+            ctx.closePath();
+            ctx.fill();
+          }
+        } else {
+          ctx.fillStyle = C.bush0;
+          ctx.beginPath();
+          ctx.arc(-5 * s, -6 * s, 8 * s, 0, Math.PI * 2);
+          ctx.arc(6 * s, -5 * s, 6.5 * s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (theme === 4) {
+        // 赤岩火山：尖锐岩石
+        if (type < 0.28) {
+          const h = (32 + rand01(gx, 777006) * 24) * s;
+          ctx.fillStyle = C.rockDark;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(-7 * s, 0);
+          ctx.lineTo(-4 * s, -h * 0.6);
+          ctx.lineTo(-2 * s, -h * 0.85);
+          ctx.lineTo(0, -h);
+          ctx.lineTo(2 * s, -h * 0.78);
+          ctx.lineTo(5 * s, -h * 0.52);
+          ctx.lineTo(8 * s, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = C.rockLight;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(0, -h);
+          ctx.lineTo(2 * s, -h * 0.78);
+          ctx.lineTo(5 * s, -h * 0.52);
+          ctx.lineTo(8 * s, 0);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.fillStyle = C.rockDark;
+          ctx.beginPath();
+          ctx.arc(-5 * s, -5 * s, 7 * s, 0, Math.PI * 2);
+          ctx.arc(5 * s, -4 * s, 5 * s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (theme === 5) {
+        // 薄暮紫原：薰衣草束
+        if (type < 0.36) {
+          ctx.fillStyle = C.lavender;
+          for (let i = 0; i < 4; i++) {
+            const ox = (i - 1.5) * 2 * s;
+            const h = (26 + rand01(i + gx, 777011) * 12) * s;
+            ctx.fillRect(ox - 0.7 * s, 0, 1.4 * s, -h);
+            ctx.beginPath();
+            ctx.arc(ox, -h - 3 * s, 3.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.fillStyle = C.lavenderLight;
+          for (let i = 0; i < 2; i++) {
+            const ox = (i - 0.5) * 3 * s;
+            const h = (28 + rand01(i + gx + 2, 777011) * 10) * s;
+            ctx.beginPath();
+            ctx.arc(ox, -h - 2 * s, 2.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          ctx.fillStyle = C.lavender;
+          ctx.beginPath();
+          ctx.arc(0, -10 * s, 10 * s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (theme === 6) {
+        // 极夜冰原：冰晶尖刺
+        if (type < 0.34) {
+          const h = (28 + rand01(gx, 777012) * 20) * s;
+          ctx.fillStyle = C.ice;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(-4 * s, 0);
+          ctx.lineTo(-2 * s, -h * 0.7);
+          ctx.lineTo(0, -h);
+          ctx.lineTo(2 * s, -h * 0.8);
+          ctx.lineTo(4 * s, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = C.iceLight;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(0, -h);
+          ctx.lineTo(2 * s, -h * 0.8);
+          ctx.lineTo(4 * s, 0);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.fillStyle = C.ice;
+          ctx.globalAlpha = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(-10 * s, 0);
+          ctx.lineTo(-8 * s, -2 * s);
+          ctx.lineTo(8 * s, -2 * s);
+          ctx.lineTo(10 * s, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      } else if (theme === 7) {
+        // 星海之巅：星尘 + 浮石
+        if (type < 0.3) {
+          const lift = Math.sin(time * 0.8 + gx * 0.01) * 6 * s;
+          ctx.fillStyle = C.floatRock;
+          ctx.beginPath();
+          ctx.moveTo(0, -12 * s + lift);
+          ctx.lineTo(-8 * s, -8 * s + lift);
+          ctx.lineTo(-6 * s, -4 * s + lift);
+          ctx.lineTo(6 * s, -5 * s + lift);
+          ctx.lineTo(9 * s, -9 * s + lift);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = C.starDust;
+          ctx.globalAlpha = 0.7;
+          for (let i = 0; i < 3; i++) {
+            const px = (i - 1) * 8 * s;
+            const py = -16 * s + lift + Math.sin(time * 2 + i) * 3 * s;
+            ctx.fillRect(px - 1, py - 1, 2, 2);
+          }
+          ctx.globalAlpha = 1;
+        } else {
+          ctx.fillStyle = C.starDust;
+          ctx.globalAlpha = 0.5;
+          for (let i = 0; i < 5; i++) {
+            const px = (i - 2) * 4 * s;
+            const py = -8 * s + Math.sin(time * 1.5 + i + gx * 0.01) * 4 * s;
+            ctx.fillRect(px - 1.5, py - 1.5, 3, 3);
+          }
+          ctx.globalAlpha = 1;
+        }
       }
       ctx.restore();
     }
