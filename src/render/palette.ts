@@ -64,37 +64,37 @@ export interface SkyKey {
 const KEYS: SkyKey[] = [
   {
     p: 0,
-    top: '#7ec9ea', mid: '#c4e6ef', horizon: '#ffedc6', sun: '#fff6d8', sunRim: '#ffdf9e',
-    ridgeFar: '#b9d3e4', ridgeMid: '#93b7d6', snow: '#f7f0e4', snowShade: '#e7d8c4', snowDeep: '#b8a488',
-    hillA: '#ecdfc6', hillB: '#e0d4b4', hillC: '#e6d2b8',
+    top: '#5eb8e8', mid: '#b8dce8', horizon: '#ffe7b0', sun: '#fff8e0', sunRim: '#ffd88a',
+    ridgeFar: '#9ec4d8', ridgeMid: '#7aa4c4', snow: '#f7f0e4', snowShade: '#e7d8c4', snowDeep: '#b8a488',
+    hillA: '#e8d8b8', hillB: '#dcc8a0', hillC: '#e4d0a8',
     rock: '#93826f', rockShade: '#74655a', fg: '#e8d9c8', cloud: '#fff6ea', cloudShade: '#eeddc8',
   },
   {
     p: 0.45,
-    top: '#7fa9d6', mid: '#d6dfbc', horizon: '#ffdba4', sun: '#ffe9b8', sunRim: '#ffc98a',
-    ridgeFar: '#a9beda', ridgeMid: '#8fa8ce', snow: '#f6ecdd', snowShade: '#e2cfb8', snowDeep: '#b39a82',
-    hillA: '#e8d9b6', hillB: '#dbcaa5', hillC: '#e1cc9f',
+    top: '#6a98d0', mid: '#c8d8a8', horizon: '#ffd090', sun: '#ffe8b0', sunRim: '#ffc878',
+    ridgeFar: '#98b0d0', ridgeMid: '#7e96bc', snow: '#f6ecdd', snowShade: '#e2cfb8', snowDeep: '#b39a82',
+    hillA: '#e0d0a8', hillB: '#d0bc90', hillC: '#dcc898',
     rock: '#8e7c6a', rockShade: '#6f6055', fg: '#e4d2c0', cloud: '#ffefdd', cloudShade: '#ecd7c0',
   },
   {
     p: 0.72,
-    top: '#6d7fbe', mid: '#ecac7e', horizon: '#ffad6e', sun: '#ffd9a0', sunRim: '#ff9e6e',
-    ridgeFar: '#9398c4', ridgeMid: '#7a7cb2', snow: '#f4e4ce', snowShade: '#dcc2a6', snowDeep: '#a98e74',
-    hillA: '#e3c9a2', hillB: '#d4b78e', hillC: '#dcbe96',
+    top: '#5a6cb0', mid: '#e898c8', horizon: '#ff9458', sun: '#ffd090', sunRim: '#ff8e5c',
+    ridgeFar: '#b0b8b8', ridgeMid: '#8868a0', snow: '#f4e4ce', snowShade: '#dcc2a6', snowDeep: '#a98e74',
+    hillA: '#d8b888', hillB: '#cba070', hillC: '#d0a878',
     rock: '#87745f', rockShade: '#685a4c', fg: '#d9bfae', cloud: '#ffd9c0', cloudShade: '#e5bfa4',
   },
   {
     p: 0.88,
-    top: '#4e4a82', mid: '#d97c63', horizon: '#e8543f', sun: '#ff9e6e', sunRim: '#ff7a54',
-    ridgeFar: '#6f6d9e', ridgeMid: '#5c5a8e', snow: '#e8d2be', snowShade: '#c4a38c', snowDeep: '#886a56',
-    hillA: '#d4ad8c', hillB: '#c39678', hillC: '#cda080',
+    top: '#3e3a6e', mid: '#d060a8', horizon: '#e03828', sun: '#ff8a58', sunRim: '#ff8040',
+    ridgeFar: '#5858b8', ridgeMid: '#484878', snow: '#e8d2be', snowShade: '#c4a38c', snowDeep: '#886a56',
+    hillA: '#c89870', hillB: '#b07858', hillC: '#c08860',
     rock: '#7d6a58', rockShade: '#5f5245', fg: '#c6a392', cloud: '#e8b09a', cloudShade: '#c68d7a',
   },
   {
     p: 1,
-    top: '#3a2c55', mid: '#8e4257', horizon: '#b03a48', sun: '#e86a54', sunRim: '#c84a44',
-    ridgeFar: '#565178', ridgeMid: '#494568', snow: '#d8c2b2', snowShade: '#b09284', snowDeep: '#785c50',
-    hillA: '#ba8b7c', hillB: '#a6736d', hillC: '#b68176',
+    top: '#2a1e40', mid: '#6e3048', horizon: '#8e2438', sun: '#d05040', sunRim: '#a83b38',
+    ridgeFar: '#403c60', ridgeMid: '#343050', snow: '#d8c2b2', snowShade: '#b09284', snowDeep: '#785c50',
+    hillA: '#a87868', hillB: '#906058', hillC: '#a07068',
     rock: '#6e5d50', rockShade: '#524639', fg: '#b0918a', cloud: '#b98a8a', cloudShade: '#9a6a6e',
   },
 ];
@@ -189,36 +189,36 @@ export interface ThemeDef {
 
 export const THEMES: ThemeDef[] = [
   {
-    name: '晨曦草原', strength: 0.5,
-    fields: { horizon: '#ffd9b0', ridgeFar: '#8fb8a8', ridgeMid: '#6e9c8a', snow: '#f3f0e2', snowShade: '#dfd2c0', hillA: '#86cc7e', hillB: '#d4e488', hillC: '#66bfa9' },
+    name: '晨曦草原', strength: 0.62,
+    fields: { horizon: '#ffd9a0', ridgeFar: '#88b8a0', ridgeMid: '#689888', snow: '#f3f0e2', snowShade: '#dfd2c0', snowDeep: '#b0a080', hillA: '#5cb86a', hillB: '#c8dc58', hillC: '#3ca890', rock: '#7a8670', cloud: '#f8f4e8' },
   },
   {
-    name: '金穗丘陵', strength: 0.55,
-    fields: { horizon: '#ffcf7a', ridgeFar: '#c9b06a', ridgeMid: '#a98f52', snow: '#f6ecd2', snowShade: '#e2d0a8', cloud: '#fff2d8', hillA: '#e8c46a', hillB: '#d5a44a', hillC: '#efdc96' },
+    name: '金穗丘陵', strength: 0.68,
+    fields: { horizon: '#ffc45c', ridgeFar: '#d0b870', ridgeMid: '#b09848', snow: '#f6ecd2', snowShade: '#e2d0a8', snowDeep: '#c0a878', cloud: '#fff2d8', hillA: '#e8b83c', hillB: '#d09028', hillC: '#f0d868', rock: '#a8906c' },
   },
   {
-    name: '珊瑚沙谷', strength: 0.55,
-    fields: { horizon: '#ffb4a2', ridgeFar: '#cf9a9c', ridgeMid: '#a87780', snow: '#f5e6e0', snowShade: '#e0c8c2', hillA: '#f0a48e', hillB: '#e6867e', hillC: '#f4c6a4' },
+    name: '珊瑚沙谷', strength: 0.65,
+    fields: { horizon: '#ff9e88', ridgeFar: '#d89890', ridgeMid: '#b87880', snow: '#f5e6e0', snowShade: '#e0c8c2', snowDeep: '#c09888', hillA: '#f08068', hillB: '#e05858', hillC: '#f4b088', rock: '#b88870', cloud: '#fff0e8' },
   },
   {
-    name: '翠风峡湾', strength: 0.55,
-    fields: { top: '#7fc4c0', mid: '#bfe0d2', horizon: '#f2e8c8', ridgeFar: '#7ab8a6', ridgeMid: '#52907e', snow: '#eef5ea', snowShade: '#d5e2d4', hillA: '#78c6a0', hillB: '#56a688', hillC: '#b4dc9c' },
+    name: '翠风峡湾', strength: 0.68,
+    fields: { top: '#78c0b8', mid: '#bfe0d2', horizon: '#e8e0b0', ridgeFar: '#70b0a0', ridgeMid: '#50907e', snow: '#eef5ea', snowShade: '#d5e2d4', snowDeep: '#a8c8a8', hillA: '#40b878', hillB: '#2e9070', hillC: '#88d070', rock: '#607860', cloud: '#f0f8f0' },
   },
   {
-    name: '赤岩火山', strength: 0.6,
-    fields: { horizon: '#ff9a5c', ridgeFar: '#b07a80', ridgeMid: '#8a5a62', snow: '#f0dcc8', snowShade: '#d4b49a', snowDeep: '#8a5a44', hillA: '#dd885a', hillB: '#c0684e', hillC: '#ecae7c' },
+    name: '赤岩火山', strength: 0.72,
+    fields: { horizon: '#ff8a40', ridgeFar: '#c08880', ridgeMid: '#986060', snow: '#f0dcc8', snowShade: '#d4b49a', snowDeep: '#a0785c', hillA: '#e06830', hillB: '#b84828', hillC: '#f09050', rock: '#906048', rockShade: '#684030', cloud: '#ffe0c8' },
   },
   {
-    name: '薄暮紫原', strength: 0.6,
-    fields: { top: '#8a7ab8', mid: '#c2a8cc', horizon: '#e8a8c0', ridgeFar: '#8a7ca8', ridgeMid: '#6a5e88', snow: '#ece6f0', snowShade: '#d2c8dc', hillA: '#b296ce', hillB: '#987cb4', hillC: '#ceb4da' },
+    name: '薄暮紫原', strength: 0.70,
+    fields: { top: '#9080c0', mid: '#c8a8d8', horizon: '#e890b0', ridgeFar: '#9080b0', ridgeMid: '#705888', snow: '#ece6f0', snowShade: '#d2c8dc', snowDeep: '#b0a0c8', hillA: '#a070c8', hillB: '#8050a8', hillC: '#c898d8', rock: '#886890', cloud: '#f4f0f8' },
   },
   {
-    name: '极夜冰原', strength: 0.6,
-    fields: { top: '#9ab8d8', mid: '#d0e0ea', horizon: '#f0e8ea', ridgeFar: '#a8c4dc', ridgeMid: '#7ea0c0', snow: '#f0f6fa', snowShade: '#d8e4ee', hillA: '#cce2ee', hillB: '#a6c6da', hillC: '#e2eef2' },
+    name: '极夜冰原', strength: 0.68,
+    fields: { top: '#a0c0e0', mid: '#d8e8f0', horizon: '#e8e0e8', ridgeFar: '#b0c8e0', ridgeMid: '#88a8c8', snow: '#f0f6fa', snowShade: '#d8e4ee', snowDeep: '#c0d8e8', hillA: '#a8c8e0', hillB: '#7898b8', hillC: '#d0e4f0', rock: '#8898a8', cloud: '#f8fcff' },
   },
   {
-    name: '星海之巅', strength: 0.65,
-    fields: { top: '#4a4a7c', mid: '#7c6a9c', horizon: '#c07a88', ridgeFar: '#5c5880', ridgeMid: '#484468', snow: '#dcd8e8', snowShade: '#c0bcd4', hillA: '#8884b6', hillB: '#68649a', hillC: '#a69cc6' },
+    name: '星海之巅', strength: 0.75,
+    fields: { top: '#5858a0', mid: '#8878b0', horizon: '#b06878', ridgeFar: '#686890', ridgeMid: '#505078', snow: '#dcd8e8', snowShade: '#c0bcd4', snowDeep: '#9890b0', hillA: '#6868b0', hillB: '#484890', hillC: '#8880c0', rock: '#605878', cloud: '#e8e0f0' },
   },
 ];
 

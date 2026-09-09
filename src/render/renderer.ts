@@ -209,7 +209,7 @@ export class Renderer {
     this.cam.apply(ctx);
     // 云层带（锚定局部地形之上；地形前绘制，山体会遮住插进山里的云）
     this.parallax.drawCloudBands(ctx, this.cam, vx0, vx1, this.time, (x) => sim.terrain.heightAt(x));
-    this.terrainR.draw(ctx, sim.terrain, this.cam, pal, dayP, this.time, this.h / this.cam.zoom, sim.x, fever);
+    this.terrainR.draw(ctx, sim.terrain, this.cam, pal, dayP, this.time, this.h / this.cam.zoom, sim.x, fever, lvl);
     this.terrainR.drawMilestones(ctx, sim.terrain, this.cam, pal);
     if (sim.red) this.terrainR.drawDownhillHint(ctx, sim.terrain, sim.x);
     this.terrainR.drawNest(ctx, sim.nestX, sim.terrain, pal, this.time, fever);

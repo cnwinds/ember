@@ -57,7 +57,8 @@ export class TerrainRenderer {
     time: number,
     viewH: number,
     simX: number,
-    fever: boolean
+    fever: boolean,
+    themeIdx = 0
   ): void {
     const [x0, x1] = cam.viewBounds();
     const step = 16 / cam.zoom; // 屏幕上约 16px 一段（山体平滑，16px 足够）
@@ -188,7 +189,7 @@ export class TerrainRenderer {
     ctx.fill();
 
     // ---- 赛璐璐植被（松/圆树/灌木/草丛，确定性散布 + 风摆） ----
-    this.drawScenery(ctx, terrain, cam, pal, time);
+    this.drawScenery(ctx, terrain, cam, pal, time, themeIdx);
 
     // ---- 焦痕（径向渐变软化边缘） ----
     for (const s of this.scorches) {
@@ -237,10 +238,10 @@ export class TerrainRenderer {
     void fever;
   }
 
-  /** 绘本植被：可玩地形上的松树/圆树/灌木/草丛。
+  /** 绘本植被：可玩地形上的松树/圆树/灌木/草丛，每主题有特色剪影语言。
    *  确定性散布（hash 网格）、陡坡不长树、黄昏随天色调暖、微风摆动、无描边无硬边暗面。
    *  颜色每次绘制只构建一次（每树每帧拼字符串会造成 GC 卡顿）。 */
-  drawScenery(ctx: CanvasRenderingContext2D, terrain: Terrain, cam: Camera, pal: SkyPalette, time: number): void {
+  drawScenery(ctx: CanvasRenderingContext2D, terrain: Terrain, cam: Camera, pal: SkyPalette, time: number, themeIdx = 0): void {
     const [x0, x1] = cam.viewBounds();
     // 植被色阶按调色板对象缓存（每帧只取引用；重建仅发生在昼夜档/主题变化时）
     let C = this.scenCache.get(pal);
@@ -267,9 +268,14 @@ export class TerrainRenderer {
         roundShade: build(ROUND, 0.7),
         bush0: build(ROUND, 0.1),
         grass: build(PINE, -0.1),
+        rockDark: build('90,76,68', 0.6),
+        rockLight: build('120,98,84', 0.2),
       };
       this.scenCache.set(pal, C);
     }
+
+    // 主题道具配置：0=晨曦草原 1=金穗丘陵 2=珊瑚沙谷 3=翠风峡湾 4=赤岩火山 5=薄暮紫原 6=极夜冰原 7=星海之巅
+    const theme = themeIdx % 8;
 
     for (let gx = Math.floor(x0 / 210) * 210; gx <= x1 + 210; gx += 210) {
       const h1 = rand01(gx, 777001);
@@ -284,7 +290,33 @@ export class TerrainRenderer {
       ctx.save();
       ctx.translate(x, gy);
       ctx.rotate(terrain.tangentAngle(x) * 0.45 + sway);
-      if (type < 0.42) {
+
+      // 主题 4 火山：增加尖锐岩石剪影
+      if (theme === 4 && type < 0.28) {
+        const h = (32 + rand01(gx, 777006) * 24) * s;
+        ctx.fillStyle = C.rockDark;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-7 * s, 0);
+        ctx.lineTo(-4 * s, -h * 0.6);
+        ctx.lineTo(-2 * s, -h * 0.85);
+        ctx.lineTo(0, -h);
+        ctx.lineTo(2 * s, -h * 0.78);
+        ctx.lineTo(5 * s, -h * 0.52);
+        ctx.lineTo(8 * s, 0);
+        ctx.closePath();
+        ctx.fill();
+        // 受光面
+        ctx.fillStyle = C.rockLight;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -h);
+        ctx.lineTo(2 * s, -h * 0.78);
+        ctx.lineTo(5 * s, -h * 0.52);
+        ctx.lineTo(8 * s, 0);
+        ctx.closePath();
+        ctx.fill();
+      } else if (type < 0.42) {
         // 松树：三层近似色阶三角（远暗近亮）+ 树干，无暗面切分
         ctx.fillStyle = C.trunk;
         ctx.fillRect(-2 * s, -10 * s, 4 * s, 11 * s);
